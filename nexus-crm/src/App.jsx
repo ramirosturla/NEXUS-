@@ -1,78 +1,176 @@
 import React, { useState, useMemo } from "react";
 import {
-  LayoutDashboard, Megaphone, KanbanSquare, Settings, Users,
-  TrendingUp, DollarSign, Target, Percent, Plus, Search,
-  X, Flame, Snowflake, Thermometer, ArrowRight, Trophy,
-  XCircle, Zap, Circle, Filter, MoreVertical, ChevronRight,
+  LayoutDashboard, Building2, KanbanSquare, Users, Ship,
+  TrendingUp, DollarSign, Users2, Anchor, Search, ArrowLeft,
+  ArrowRight, X, Plus, LogOut, Lock, ChevronRight, Calendar,
+  MapPin, Mail, Phone, CheckCircle2, Clock, XCircle, Filter, Zap,
+  Map as MapIcon, NotebookPen, CalendarClock,
 } from "lucide-react";
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid,
+  BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
+import {
+  BRAND, USUARIOS, EJECUTIVOS, EXCURSIONES, ESTADOS_AGENCIA, ETAPAS,
+  AGENCIAS, PIPELINE_INICIAL, DATOS_MENSUALES, ZONAS, fmt, totalPax,
+  totalFacturado, geoDeCiudad, resumenPorZona,
+} from "./data";
 
-// ─────────────────────────────────────────────────────────────
-// Datos ficticios iniciales
-// ─────────────────────────────────────────────────────────────
-const VENDEDORES = ["Lucía Fernández", "Martín Gómez", "Sofía Ruiz", "Diego Torres"];
+// ═════════════════════════════════════════════════════════════
+// Logo de Sturla recreado en SVG (timón + texto)
+// ═════════════════════════════════════════════════════════════
+function Logo({ size = 36, light = false }) {
+  const c = light ? "#ffffff" : BRAND.abismo;
+  const acc = BRAND.turquesa;
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className="rounded-xl flex items-center justify-center shrink-0"
+        style={{ width: size, height: size, background: light ? "rgba(255,255,255,0.12)" : BRAND.espuma }}>
+        <Anchor size={size * 0.55} style={{ color: acc }} strokeWidth={2.2} />
+      </div>
+      <div className="leading-none">
+        <p className="font-bold tracking-tight" style={{ color: c, fontSize: size * 0.42 }}>
+          Sturla<span style={{ color: acc }}>CRM</span>
+        </p>
+        <p className="font-medium tracking-wide" style={{ color: light ? "rgba(255,255,255,0.6)" : "#94a3b8", fontSize: size * 0.26 }}>
+          Canal de Agencias
+        </p>
+      </div>
+    </div>
+  );
+}
 
-const ORIGENES = {
-  "Meta Ads": "#2563eb",
-  "Google": "#dc2626",
-  "Orgánico": "#16a34a",
-  "WhatsApp": "#059669",
+// ═════════════════════════════════════════════════════════════
+// Auxiliares
+// ═════════════════════════════════════════════════════════════
+function Avatar({ name, size = 28 }) {
+  const initials = name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+  const hue = (name.charCodeAt(0) * 11 + name.length * 7) % 360;
+  return (
+    <div className="rounded-full flex items-center justify-center font-semibold text-white shrink-0"
+      style={{ width: size, height: size, fontSize: size * 0.38, background: `hsl(${hue}, 45%, 45%)` }}>
+      {initials}
+    </div>
+  );
+}
+
+function EstadoBadge({ estado }) {
+  const c = ESTADOS_AGENCIA[estado];
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
+      style={{ color: c.color, background: c.bg }}>
+      <span className="w-1.5 h-1.5 rounded-full" style={{ background: c.color }} />
+      {c.label}
+    </span>
+  );
+}
+
+const RESERVA_ESTADO = {
+  Confirmada: { color: "#16a34a", bg: "#dcfce7", icon: CheckCircle2 },
+  Pendiente:  { color: "#f59e0b", bg: "#fef3c7", icon: Clock },
+  Cancelada:  { color: "#e11d48", bg: "#ffe4e6", icon: XCircle },
 };
 
-const LEADS_INICIALES = [
-  { id: 1, nombre: "Comercial San Telmo", origen: "Meta Ads", fecha: "2026-06-18", estado: "Caliente", vendedor: "Lucía Fernández", valor: 45000 },
-  { id: 2, nombre: "Estudio Belgrano", origen: "Google", fecha: "2026-06-18", estado: "Tibio", vendedor: "Martín Gómez", valor: 28000 },
-  { id: 3, nombre: "Distribuidora Norte", origen: "WhatsApp", fecha: "2026-06-17", estado: "Caliente", vendedor: "Sofía Ruiz", valor: 92000 },
-  { id: 4, nombre: "Café del Puerto", origen: "Orgánico", fecha: "2026-06-17", estado: "Frío", vendedor: "Diego Torres", valor: 15000 },
-  { id: 5, nombre: "Logística Tigre", origen: "Meta Ads", fecha: "2026-06-16", estado: "Tibio", vendedor: "Lucía Fernández", valor: 61000 },
-  { id: 6, nombre: "Inmobiliaria Centro", origen: "Google", fecha: "2026-06-16", estado: "Caliente", vendedor: "Martín Gómez", valor: 38000 },
-  { id: 7, nombre: "Taller Mecánico Sur", origen: "WhatsApp", fecha: "2026-06-15", estado: "Frío", vendedor: "Sofía Ruiz", valor: 22000 },
-  { id: 8, nombre: "Boutique Palermo", origen: "Meta Ads", fecha: "2026-06-15", estado: "Tibio", vendedor: "Diego Torres", valor: 34000 },
-];
+// ═════════════════════════════════════════════════════════════
+// PANTALLA DE LOGIN
+// ═════════════════════════════════════════════════════════════
+function Login({ onLogin }) {
+  const [user, setUser] = useState("");
+  const [pass, setPass] = useState("");
+  const [error, setError] = useState("");
 
-const PIPELINE_INICIAL = [
-  { id: 101, cliente: "Comercial San Telmo", valor: 45000, vendedor: "Lucía Fernández", etapa: "calificacion" },
-  { id: 102, cliente: "Distribuidora Norte", valor: 92000, vendedor: "Sofía Ruiz", etapa: "calificacion" },
-  { id: 103, cliente: "Logística Tigre", valor: 61000, vendedor: "Lucía Fernández", etapa: "negociacion" },
-  { id: 104, cliente: "Inmobiliaria Centro", valor: 38000, vendedor: "Martín Gómez", etapa: "negociacion" },
-  { id: 105, cliente: "Mayorista Once", valor: 120000, vendedor: "Sofía Ruiz", etapa: "ganado" },
-  { id: 106, cliente: "Kiosco Express", valor: 18000, vendedor: "Diego Torres", etapa: "ganado" },
-  { id: 107, cliente: "Restó Costanera", valor: 27000, vendedor: "Martín Gómez", etapa: "perdido" },
-];
+  const submit = () => {
+    const found = USUARIOS.find(
+      (u) => u.user === user.trim().toLowerCase() && u.pass === pass
+    );
+    if (found) { setError(""); onLogin(found); }
+    else setError("Usuario o contraseña incorrectos.");
+  };
 
-const DATOS_MENSUALES = [
-  { mes: "Ene", leads: 145, ingresos: 320 },
-  { mes: "Feb", leads: 168, ingresos: 385 },
-  { mes: "Mar", leads: 192, ingresos: 410 },
-  { mes: "Abr", leads: 210, ingresos: 478 },
-  { mes: "May", leads: 235, ingresos: 540 },
-  { mes: "Jun", leads: 258, ingresos: 612 },
-];
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
+      style={{ background: `linear-gradient(135deg, ${BRAND.abismo} 0%, ${BRAND.marea} 60%, ${BRAND.turquesa} 140%)` }}>
+      {/* Olas decorativas */}
+      <svg className="absolute bottom-0 left-0 w-full opacity-20" viewBox="0 0 1440 320" preserveAspectRatio="none" style={{ height: 200 }}>
+        <path fill="#ffffff" d="M0,160 C320,260 420,60 720,140 C1020,220 1200,80 1440,150 L1440,320 L0,320 Z" />
+      </svg>
+      <svg className="absolute bottom-0 left-0 w-full opacity-10" viewBox="0 0 1440 320" preserveAspectRatio="none" style={{ height: 260 }}>
+        <path fill="#ffffff" d="M0,220 C360,120 540,280 900,200 C1180,140 1320,240 1440,200 L1440,320 L0,320 Z" />
+      </svg>
 
-const ETAPAS = [
-  { key: "calificacion", label: "Contactado / Calificación", color: "#3b82f6", icon: Circle },
-  { key: "negociacion", label: "Negociación / Presupuesto", color: "#f59e0b", icon: Thermometer },
-  { key: "ganado", label: "Ganado", color: "#16a34a", icon: Trophy },
-  { key: "perdido", label: "Perdido", color: "#ef4444", icon: XCircle },
-];
+      <div className="relative w-full max-w-sm">
+        <div className="flex justify-center mb-6">
+          <Logo size={52} light />
+        </div>
 
-const ESTADO_CONFIG = {
-  Frío: { color: "#3b82f6", bg: "#eff6ff", icon: Snowflake },
-  Tibio: { color: "#f59e0b", bg: "#fffbeb", icon: Thermometer },
-  Caliente: { color: "#ef4444", bg: "#fef2f2", icon: Flame },
-};
+        <div className="bg-white rounded-2xl shadow-2xl p-8">
+          <h1 className="text-xl font-bold text-slate-800 tracking-tight">Acceso al equipo</h1>
+          <p className="text-sm text-slate-500 mt-1 mb-6">
+            Ingresá con tu usuario para gestionar el canal de agencias.
+          </p>
 
-const fmt = (n) => "$" + n.toLocaleString("es-AR");
+          <div className="space-y-4">
+            <label className="block">
+              <span className="text-xs font-semibold text-slate-500 mb-1.5 block">Usuario</span>
+              <div className="relative">
+                <Users size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input value={user} onChange={(e) => setUser(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && submit()}
+                  placeholder="ej: lucia" autoFocus
+                  className="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:border-transparent"
+                  style={{ "--tw-ring-color": BRAND.turquesa }} />
+              </div>
+            </label>
+            <label className="block">
+              <span className="text-xs font-semibold text-slate-500 mb-1.5 block">Contraseña</span>
+              <div className="relative">
+                <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input value={pass} onChange={(e) => setPass(e.target.value)} type="password"
+                  onKeyDown={(e) => e.key === "Enter" && submit()}
+                  placeholder="••••••••"
+                  className="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:border-transparent"
+                  style={{ "--tw-ring-color": BRAND.turquesa }} />
+              </div>
+            </label>
 
-// ─────────────────────────────────────────────────────────────
-// Componentes auxiliares
-// ─────────────────────────────────────────────────────────────
+            {error && (
+              <div className="text-sm text-rose-600 bg-rose-50 rounded-lg px-3 py-2">{error}</div>
+            )}
+
+            <button onClick={submit}
+              className="w-full text-sm font-semibold text-white rounded-lg py-2.5 transition-opacity hover:opacity-90"
+              style={{ background: BRAND.abismo }}>
+              Ingresar
+            </button>
+          </div>
+
+          <div className="mt-5 pt-5 border-t border-slate-100">
+            <p className="text-xs text-slate-400 mb-2">Usuarios de prueba:</p>
+            <div className="flex flex-wrap gap-1.5">
+              {USUARIOS.map((u) => (
+                <button key={u.user}
+                  onClick={() => { setUser(u.user); setPass(u.pass); }}
+                  className="text-xs px-2 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
+                  {u.user}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <p className="text-center text-xs text-white/50 mt-5">
+          Prototipo interno · Sturla Viajes · Delta del Paraná
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════
+// KPI Card
+// ═════════════════════════════════════════════════════════════
 function KpiCard({ icon: Icon, label, value, delta, accent }) {
   return (
-    <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md hover:border-slate-300 transition-all">
+    <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md transition-all">
       <div className="flex items-start justify-between">
         <div className="p-2.5 rounded-lg" style={{ background: accent + "15" }}>
           <Icon size={20} style={{ color: accent }} />
@@ -89,293 +187,458 @@ function KpiCard({ icon: Icon, label, value, delta, accent }) {
   );
 }
 
-function Badge({ estado }) {
-  const c = ESTADO_CONFIG[estado];
-  const Icon = c.icon;
-  return (
-    <span className="inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full"
-      style={{ color: c.color, background: c.bg }}>
-      <Icon size={12} /> {estado}
-    </span>
-  );
-}
+// ═════════════════════════════════════════════════════════════
+// VISTA: Dashboard
+// ═════════════════════════════════════════════════════════════
+function Dashboard({ agencias }) {
+  const activas = agencias.filter((a) => a.estado === "Activa").length;
+  const paxTotal = agencias.reduce((s, a) => s + totalPax(a), 0);
+  const facturacion = agencias.reduce((s, a) => s + totalFacturado(a), 0);
+  const reservasTotal = agencias.reduce((s, a) => s + a.reservas.length, 0);
 
-function Avatar({ name, size = 28 }) {
-  const initials = name.split(" ").map((w) => w[0]).join("").slice(0, 2);
-  const hue = name.charCodeAt(0) * 7 % 360;
-  return (
-    <div className="rounded-full flex items-center justify-center font-semibold text-white shrink-0"
-      style={{ width: size, height: size, fontSize: size * 0.38, background: `hsl(${hue}, 55%, 50%)` }}>
-      {initials}
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
-// Vista: Dashboard
-// ─────────────────────────────────────────────────────────────
-function Dashboard({ leads, pipeline }) {
-  const totalLeads = leads.length;
-  const ganados = pipeline.filter((p) => p.etapa === "ganado");
-  const facturacion = ganados.reduce((s, p) => s + p.valor, 0);
-  const conversion = ((ganados.length / pipeline.length) * 100).toFixed(1);
-
-  const embudo = [
-    { etapa: "Leads Marketing", cantidad: 258, color: "#1e3a8a" },
-    { etapa: "Calificación", cantidad: 148, color: "#2563eb" },
-    { etapa: "Negociación", cantidad: 86, color: "#0891b2" },
-    { etapa: "Venta Cerrada", cantidad: 52, color: "#16a34a" },
-  ];
-  const maxEmbudo = embudo[0].cantidad;
+  // Pasajeros por excursión
+  const porExcursion = EXCURSIONES.map((exc) => {
+    const pax = agencias.reduce((s, a) =>
+      s + a.reservas.filter((x) => x.excId === exc.id && x.estado !== "Cancelada")
+        .reduce((ss, x) => ss + x.pax, 0), 0);
+    return { nombre: exc.nombre.replace("Navegación ", "").replace("Day Tour ", ""), pax, color: exc.color };
+  }).filter((e) => e.pax > 0).sort((a, b) => b.pax - a.pax);
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        <KpiCard icon={Users} label="Leads Totales" value="258" delta="+12%" accent="#2563eb" />
-        <KpiCard icon={Percent} label="Tasa de Conversión" value={conversion + "%"} delta="+3.2%" accent="#16a34a" />
-        <KpiCard icon={Target} label="Costo por Lead (CPL)" value="$1.240" delta="-8%" accent="#7c3aed" />
-        <KpiCard icon={TrendingUp} label="ROI" value="340%" delta="+24%" accent="#0891b2" />
-        <KpiCard icon={DollarSign} label="Facturación Total" value={fmt(facturacion)} delta="+18%" accent="#059669" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard icon={Building2} label="Agencias activas" value={activas} delta="+2" accent={BRAND.marea} />
+        <KpiCard icon={Users2} label="Pasajeros reservados" value={paxTotal.toLocaleString("es-AR")} delta="+11%" accent={BRAND.turquesa} />
+        <KpiCard icon={Ship} label="Reservas del período" value={reservasTotal} delta="+8%" accent="#0891b2" />
+        <KpiCard icon={DollarSign} label="Facturación canal" value={fmt(facturacion)} delta="+18%" accent={BRAND.verdeOk} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Embudo */}
+        {/* Pasajeros e ingresos mensuales */}
         <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h3 className="font-semibold text-slate-800 mb-1">Embudo de Conversión</h3>
-          <p className="text-sm text-slate-500 mb-5">Marketing → Comercial → Venta</p>
-          <div className="space-y-3">
-            {embudo.map((e, i) => {
-              const pct = (e.cantidad / maxEmbudo) * 100;
-              const conv = i > 0 ? ((e.cantidad / embudo[i - 1].cantidad) * 100).toFixed(0) : null;
-              return (
-                <div key={e.etapa}>
-                  <div className="flex justify-between text-sm mb-1.5">
-                    <span className="text-slate-600 font-medium">{e.etapa}</span>
-                    <span className="text-slate-800 font-semibold">
-                      {e.cantidad}
-                      {conv && <span className="text-slate-400 font-normal ml-2">({conv}%)</span>}
-                    </span>
-                  </div>
-                  <div className="h-9 bg-slate-100 rounded-lg overflow-hidden">
-                    <div className="h-full rounded-lg flex items-center justify-end pr-3 transition-all duration-700"
-                      style={{ width: pct + "%", background: e.color }}>
-                      <span className="text-white text-xs font-semibold">{pct.toFixed(0)}%</span>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Líneas */}
-        <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h3 className="font-semibold text-slate-800 mb-1">Leads e Ingresos Mensuales</h3>
+          <h3 className="font-semibold text-slate-800 mb-1">Pasajeros e ingresos mensuales</h3>
           <p className="text-sm text-slate-500 mb-5">Ingresos en miles de $ARS</p>
-          <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={DATOS_MENSUALES} margin={{ left: -20, right: 8 }}>
+          <ResponsiveContainer width="100%" height={250}>
+            <LineChart data={DATOS_MENSUALES} margin={{ left: -18, right: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="mes" stroke="#94a3b8" fontSize={12} />
               <YAxis stroke="#94a3b8" fontSize={12} />
               <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13 }} />
               <Legend wrapperStyle={{ fontSize: 13 }} />
-              <Line type="monotone" dataKey="leads" stroke="#2563eb" strokeWidth={2.5} dot={{ r: 3 }} name="Leads" />
-              <Line type="monotone" dataKey="ingresos" stroke="#16a34a" strokeWidth={2.5} dot={{ r: 3 }} name="Ingresos" />
+              <Line type="monotone" dataKey="pax" stroke={BRAND.marea} strokeWidth={2.5} dot={{ r: 3 }} name="Pasajeros" />
+              <Line type="monotone" dataKey="ingresos" stroke={BRAND.turquesa} strokeWidth={2.5} dot={{ r: 3 }} name="Ingresos (K)" />
             </LineChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Pasajeros por excursión */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h3 className="font-semibold text-slate-800 mb-1">Pasajeros por excursión</h3>
+          <p className="text-sm text-slate-500 mb-5">Demanda del canal por producto</p>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={porExcursion} layout="vertical" margin={{ left: 20, right: 16 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+              <XAxis type="number" stroke="#94a3b8" fontSize={12} />
+              <YAxis type="category" dataKey="nombre" stroke="#94a3b8" fontSize={11} width={110} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13 }} cursor={{ fill: "#f8fafc" }} />
+              <Bar dataKey="pax" radius={[0, 6, 6, 0]} name="Pasajeros">
+                {porExcursion.map((e, i) => <Cell key={i} fill={e.color} />)}
+              </Bar>
+            </BarChart>
           </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Barras */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6">
-        <h3 className="font-semibold text-slate-800 mb-5">Volumen de Leads por Mes</h3>
-        <ResponsiveContainer width="100%" height={260}>
-          <BarChart data={DATOS_MENSUALES} margin={{ left: -20, right: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-            <XAxis dataKey="mes" stroke="#94a3b8" fontSize={12} />
-            <YAxis stroke="#94a3b8" fontSize={12} />
-            <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 13 }} cursor={{ fill: "#f8fafc" }} />
-            <Bar dataKey="leads" fill="#2563eb" radius={[6, 6, 0, 0]} name="Leads" />
-          </BarChart>
-        </ResponsiveContainer>
+      {/* Ranking de agencias */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100">
+          <h3 className="font-semibold text-slate-800">Top agencias del canal</h3>
+          <p className="text-sm text-slate-500 mt-0.5">Ordenadas por pasajeros reservados</p>
+        </div>
+        <div className="divide-y divide-slate-100">
+          {[...agencias].sort((a, b) => totalPax(b) - totalPax(a)).slice(0, 5).map((a, i) => {
+            const pax = totalPax(a);
+            const max = Math.max(...agencias.map(totalPax));
+            return (
+              <div key={a.id} className="flex items-center gap-4 px-6 py-3.5">
+                <span className="text-sm font-bold text-slate-300 w-5">{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-slate-800 text-sm truncate">{a.nombre}</p>
+                  <p className="text-xs text-slate-400">{a.ciudad}</p>
+                </div>
+                <div className="w-40 h-2 bg-slate-100 rounded-full overflow-hidden hidden sm:block">
+                  <div className="h-full rounded-full" style={{ width: (pax / max * 100) + "%", background: BRAND.turquesa }} />
+                </div>
+                <span className="text-sm font-semibold text-slate-700 w-20 text-right">{pax} pax</span>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// Vista: Marketing (Leads)
-// ─────────────────────────────────────────────────────────────
-function Marketing({ leads, addLead, updateEstado }) {
-  const [showForm, setShowForm] = useState(false);
+// ═════════════════════════════════════════════════════════════
+// VISTA: Agencias (lista + detalle)
+// ═════════════════════════════════════════════════════════════
+function Agencias({ agencias, addAgencia, addVisita }) {
+  const [sel, setSel] = useState(null);
   const [search, setSearch] = useState("");
-  const [filtroOrigen, setFiltroOrigen] = useState("Todos");
-  const [filtroEstado, setFiltroEstado] = useState("Todos");
+  const [filtro, setFiltro] = useState("Todas");
+  const [showForm, setShowForm] = useState(false);
 
-  const filtrados = useMemo(() => leads.filter((l) =>
-    l.nombre.toLowerCase().includes(search.toLowerCase()) &&
-    (filtroOrigen === "Todos" || l.origen === filtroOrigen) &&
-    (filtroEstado === "Todos" || l.estado === filtroEstado)
-  ), [leads, search, filtroOrigen, filtroEstado]);
+  if (sel) {
+    const ag = agencias.find((a) => a.id === sel);
+    if (ag) return <AgenciaDetalle ag={ag} onBack={() => setSel(null)} addVisita={addVisita} />;
+  }
+
+  const filtradas = agencias.filter((a) =>
+    a.nombre.toLowerCase().includes(search.toLowerCase()) &&
+    (filtro === "Todas" || a.estado === filtro)
+  );
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
         <div className="relative flex-1 max-w-xs">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar lead..."
-            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500" />
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar agencia..."
+            className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
         </div>
         <button onClick={() => setShowForm(true)}
-          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
-          <Plus size={16} /> Nuevo lead
+          className="inline-flex items-center gap-2 text-white text-sm font-medium px-4 py-2 rounded-lg transition-opacity hover:opacity-90"
+          style={{ background: BRAND.abismo }}>
+          <Plus size={16} /> Nueva agencia
         </button>
       </div>
 
-      {/* Filtros */}
       <div className="flex flex-wrap gap-2 items-center">
         <Filter size={15} className="text-slate-400" />
-        <FilterGroup label="Origen" value={filtroOrigen} setValue={setFiltroOrigen}
-          options={["Todos", ...Object.keys(ORIGENES)]} />
-        <FilterGroup label="Estado" value={filtroEstado} setValue={setFiltroEstado}
-          options={["Todos", "Frío", "Tibio", "Caliente"]} />
-      </div>
-
-      {/* Tabla */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50/70 text-left text-slate-500">
-                <th className="px-5 py-3 font-medium">Nombre</th>
-                <th className="px-5 py-3 font-medium">Origen</th>
-                <th className="px-5 py-3 font-medium">Fecha</th>
-                <th className="px-5 py-3 font-medium">Estado</th>
-                <th className="px-5 py-3 font-medium">Asignado a</th>
-                <th className="px-5 py-3 font-medium text-right">Valor est.</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtrados.map((l) => (
-                <tr key={l.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
-                  <td className="px-5 py-3 font-medium text-slate-800">{l.nombre}</td>
-                  <td className="px-5 py-3">
-                    <span className="inline-flex items-center gap-1.5 text-slate-600">
-                      <span className="w-2 h-2 rounded-full" style={{ background: ORIGENES[l.origen] }} />
-                      {l.origen}
-                    </span>
-                  </td>
-                  <td className="px-5 py-3 text-slate-500">{l.fecha}</td>
-                  <td className="px-5 py-3">
-                    <select value={l.estado} onChange={(e) => updateEstado(l.id, e.target.value)}
-                      className="text-xs font-medium border-0 rounded-full px-2 py-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                      style={{ color: ESTADO_CONFIG[l.estado].color, background: ESTADO_CONFIG[l.estado].bg }}>
-                      <option>Frío</option><option>Tibio</option><option>Caliente</option>
-                    </select>
-                  </td>
-                  <td className="px-5 py-3">
-                    <div className="flex items-center gap-2 text-slate-600">
-                      <Avatar name={l.vendedor} size={24} /> {l.vendedor}
-                    </div>
-                  </td>
-                  <td className="px-5 py-3 text-right font-semibold text-slate-700">{fmt(l.valor)}</td>
-                </tr>
-              ))}
-              {filtrados.length === 0 && (
-                <tr><td colSpan={6} className="px-5 py-10 text-center text-slate-400">
-                  No hay leads que coincidan. Ajustá los filtros o agregá uno nuevo.
-                </td></tr>
-              )}
-            </tbody>
-          </table>
+        <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+          {["Todas", "Activa", "Prospecto", "Inactiva"].map((o) => (
+            <button key={o} onClick={() => setFiltro(o)}
+              className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                filtro === o ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              }`}>
+              {o}
+            </button>
+          ))}
         </div>
       </div>
 
-      {showForm && <LeadForm onClose={() => setShowForm(false)} onSave={addLead} />}
+      {/* Grid de tarjetas de agencia */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {filtradas.map((a) => (
+          <button key={a.id} onClick={() => setSel(a.id)}
+            className="text-left bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md hover:border-cyan-300 transition-all group">
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-11 h-11 rounded-lg flex items-center justify-center" style={{ background: BRAND.espuma }}>
+                <Building2 size={22} style={{ color: BRAND.marea }} />
+              </div>
+              <EstadoBadge estado={a.estado} />
+            </div>
+            <h3 className="font-semibold text-slate-800 group-hover:text-cyan-700 transition-colors">{a.nombre}</h3>
+            <p className="text-xs text-slate-400 flex items-center gap-1 mt-1">
+              <MapPin size={12} /> {a.ciudad}
+            </p>
+            <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-100">
+              <div>
+                <p className="text-lg font-bold text-slate-800">{totalPax(a)}</p>
+                <p className="text-xs text-slate-400">pasajeros</p>
+              </div>
+              <div>
+                <p className="text-lg font-bold text-slate-800">{a.reservas.length}</p>
+                <p className="text-xs text-slate-400">reservas</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 mt-4 text-xs text-slate-500">
+              <Avatar name={a.ejecutivo} size={20} /> {a.ejecutivo}
+              <ChevronRight size={14} className="ml-auto text-slate-300 group-hover:text-cyan-500 transition-colors" />
+            </div>
+          </button>
+        ))}
+        {filtradas.length === 0 && (
+          <div className="col-span-full text-center text-slate-400 py-12 bg-white rounded-xl border border-dashed border-slate-200">
+            No hay agencias que coincidan. Probá con otro filtro o agregá una nueva.
+          </div>
+        )}
+      </div>
+
+      {showForm && <AgenciaForm onClose={() => setShowForm(false)} onSave={addAgencia} />}
     </div>
   );
 }
 
-function FilterGroup({ label, value, setValue, options }) {
+// Detalle de una agencia con histórico
+function AgenciaDetalle({ ag, onBack, addVisita }) {
+  const [showVisita, setShowVisita] = useState(false);
+  const pax = totalPax(ag);
+  const fact = totalFacturado(ag);
+  const confirmadas = ag.reservas.filter((r) => r.estado === "Confirmada").length;
+  const visitas = ag.visitas || [];
+  const ultimaVisita = visitas.length
+    ? [...visitas].sort((a, b) => b.fecha.localeCompare(a.fecha))[0].fecha
+    : null;
+
   return (
-    <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
-      {options.map((o) => (
-        <button key={o} onClick={() => setValue(o)}
-          className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
-            value === o ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"
-          }`}>
-          {o}
-        </button>
-      ))}
+    <div className="space-y-6">
+      <button onClick={onBack}
+        className="inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">
+        <ArrowLeft size={16} /> Volver a agencias
+      </button>
+
+      {/* Encabezado */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <div className="w-14 h-14 rounded-xl flex items-center justify-center shrink-0" style={{ background: BRAND.espuma }}>
+              <Building2 size={28} style={{ color: BRAND.marea }} />
+            </div>
+            <div>
+              <div className="flex items-center gap-3 flex-wrap">
+                <h2 className="text-xl font-bold text-slate-800 tracking-tight">{ag.nombre}</h2>
+                <EstadoBadge estado={ag.estado} />
+              </div>
+              <div className="flex flex-wrap gap-x-5 gap-y-1.5 mt-2.5 text-sm text-slate-500">
+                <span className="flex items-center gap-1.5"><MapPin size={14} /> {ag.direccion || ag.ciudad}</span>
+                <span className="flex items-center gap-1.5"><Mail size={14} /> {ag.email}</span>
+                <span className="flex items-center gap-1.5"><Phone size={14} /> {ag.telefono}</span>
+                <span className="flex items-center gap-1.5"><Calendar size={14} /> Desde {ag.desde}</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-sm bg-slate-50 rounded-lg px-3 py-2 shrink-0">
+            <Avatar name={ag.ejecutivo} size={28} />
+            <div className="leading-tight">
+              <p className="text-xs text-slate-400">Ejecutivo a cargo</p>
+              <p className="font-medium text-slate-700">{ag.ejecutivo}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Métricas de la agencia */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard icon={Users2} label="Pasajeros totales" value={pax} accent={BRAND.turquesa} />
+        <KpiCard icon={Ship} label="Reservas históricas" value={ag.reservas.length} accent={BRAND.marea} />
+        <KpiCard icon={DollarSign} label="Facturación total" value={fmt(fact)} accent="#0891b2" />
+        <KpiCard icon={CalendarClock} label="Última visita" value={ultimaVisita || "—"} accent={BRAND.sol} />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* Histórico de reservas */}
+        <div className="lg:col-span-3 bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="px-6 py-4 border-b border-slate-100">
+            <h3 className="font-semibold text-slate-800">Histórico de reservas</h3>
+            <p className="text-sm text-slate-500 mt-0.5">Operaciones de pasajeros de esta agencia</p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50/70 text-left text-slate-500">
+                  <th className="px-5 py-3 font-medium">Fecha</th>
+                  <th className="px-5 py-3 font-medium">Excursión</th>
+                  <th className="px-5 py-3 font-medium text-center">Pax</th>
+                  <th className="px-5 py-3 font-medium">Estado</th>
+                  <th className="px-5 py-3 font-medium text-right">Monto</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ag.reservas.length === 0 && (
+                  <tr><td colSpan={5} className="px-5 py-10 text-center text-slate-400">
+                    Esta agencia todavía no tiene reservas cargadas.
+                  </td></tr>
+                )}
+                {[...ag.reservas].sort((a, b) => b.fecha.localeCompare(a.fecha)).map((r) => {
+                  const e = RESERVA_ESTADO[r.estado];
+                  const Icon = e.icon;
+                  return (
+                    <tr key={r.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
+                      <td className="px-5 py-3 text-slate-500 whitespace-nowrap">{r.fecha}</td>
+                      <td className="px-5 py-3 font-medium text-slate-800">{r.excursion}</td>
+                      <td className="px-5 py-3 text-center font-semibold text-slate-700">{r.pax}</td>
+                      <td className="px-5 py-3">
+                        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full"
+                          style={{ color: e.color, background: e.bg }}>
+                          <Icon size={12} /> {r.estado}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-right font-semibold text-slate-700 whitespace-nowrap">{fmt(r.monto)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Bitácora de visitas */}
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
+          <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-2">
+            <div>
+              <h3 className="font-semibold text-slate-800">Visitas comerciales</h3>
+              <p className="text-sm text-slate-500 mt-0.5">Bitácora de contactos</p>
+            </div>
+            <button onClick={() => setShowVisita(true)}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-white px-3 py-2 rounded-lg transition-opacity hover:opacity-90 shrink-0"
+              style={{ background: BRAND.abismo }}>
+              <Plus size={14} /> Registrar
+            </button>
+          </div>
+          <div className="flex-1 p-5">
+            {visitas.length === 0 && (
+              <div className="text-center text-sm text-slate-400 py-8">
+                <NotebookPen size={28} className="mx-auto mb-2 text-slate-300" />
+                Todavía no registraste visitas a esta agencia.
+              </div>
+            )}
+            <div className="space-y-4">
+              {[...visitas].sort((a, b) => b.fecha.localeCompare(a.fecha)).map((vi, idx) => (
+                <div key={vi.id} className="relative pl-6">
+                  <span className="absolute left-0 top-1.5 w-2.5 h-2.5 rounded-full ring-4 ring-white"
+                    style={{ background: BRAND.turquesa }} />
+                  {idx < visitas.length - 1 && (
+                    <span className="absolute left-[4.5px] top-5 bottom-[-16px] w-px bg-slate-200" />
+                  )}
+                  <p className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+                    <Calendar size={12} className="text-slate-400" /> {vi.fecha}
+                  </p>
+                  <p className="text-sm text-slate-600 mt-1 leading-relaxed">{vi.nota}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {showVisita && (
+        <VisitaForm agNombre={ag.nombre}
+          onClose={() => setShowVisita(false)}
+          onSave={(visita) => { addVisita(ag.id, visita); setShowVisita(false); }} />
+      )}
     </div>
   );
 }
 
-function LeadForm({ onClose, onSave }) {
+// Formulario para registrar una visita comercial
+function VisitaForm({ agNombre, onClose, onSave }) {
+  const [fecha, setFecha] = useState(new Date().toISOString().slice(0, 10));
+  const [nota, setNota] = useState("");
+
+  const submit = () => {
+    if (!nota.trim()) return;
+    onSave({ fecha, nota: nota.trim() });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <h3 className="font-semibold text-slate-800">Registrar visita</h3>
+            <p className="text-xs text-slate-400 mt-0.5">{agNombre}</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <Field label="Fecha de la visita">
+            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
+          </Field>
+          <Field label="Nota / resumen">
+            <textarea value={nota} onChange={(e) => setNota(e.target.value)} rows={4} autoFocus
+              placeholder="¿Qué se habló? Acuerdos, pedidos, próximos pasos..."
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 resize-none" />
+          </Field>
+        </div>
+        <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
+          <button onClick={onClose} className="flex-1 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg py-2 hover:bg-slate-50">
+            Cancelar
+          </button>
+          <button onClick={submit} className="flex-1 text-sm font-medium text-white rounded-lg py-2 hover:opacity-90" style={{ background: BRAND.abismo }}>
+            Guardar visita
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Formulario de nueva agencia
+function AgenciaForm({ onClose, onSave }) {
   const [form, setForm] = useState({
-    nombre: "", origen: "Meta Ads", estado: "Frío", vendedor: VENDEDORES[0], valor: "",
+    nombre: "", contacto: "", email: "", telefono: "", ciudad: "", direccion: "",
+    estado: "Prospecto", ejecutivo: EJECUTIVOS[0],
   });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
   const submit = () => {
     if (!form.nombre.trim()) return;
-    onSave({
-      ...form,
-      valor: Number(form.valor) || 0,
-      fecha: new Date().toISOString().slice(0, 10),
-    });
+    onSave({ ...form, desde: new Date().toISOString().slice(0, 10) });
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-      onClick={onClose}>
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h3 className="font-semibold text-slate-800">Nuevo lead</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
-            <X size={20} />
-          </button>
+          <h3 className="font-semibold text-slate-800">Nueva agencia</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
         </div>
         <div className="p-6 space-y-4">
-          <Field label="Nombre del cliente">
-            <input value={form.nombre} onChange={set("nombre")} autoFocus
-              placeholder="Ej: Comercial Las Lomas"
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500" />
+          <Field label="Nombre de la agencia">
+            <input value={form.nombre} onChange={set("nombre")} autoFocus placeholder="Ej: Mundo Joven Travel"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
           </Field>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Origen">
-              <select value={form.origen} onChange={set("origen")}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white">
-                {Object.keys(ORIGENES).map((o) => <option key={o}>{o}</option>)}
-              </select>
+            <Field label="Contacto">
+              <input value={form.contacto} onChange={set("contacto")} placeholder="Nombre y apellido"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
             </Field>
-            <Field label="Estado">
-              <select value={form.estado} onChange={set("estado")}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white">
-                <option>Frío</option><option>Tibio</option><option>Caliente</option>
+            <Field label="Ciudad">
+              <select value={form.ciudad} onChange={set("ciudad")}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+                <option value="">Elegí una ciudad...</option>
+                {["CABA", "Tigre", "Mar del Plata", "Rosario", "Mendoza", "Bariloche", "Salta"].map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
               </select>
             </Field>
           </div>
-          <Field label="Asignar a vendedor">
-            <select value={form.vendedor} onChange={set("vendedor")}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 bg-white">
-              {VENDEDORES.map((v) => <option key={v}>{v}</option>)}
-            </select>
+          <Field label="Dirección de origen">
+            <input value={form.direccion} onChange={set("direccion")} placeholder="Calle, número, localidad"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
           </Field>
-          <Field label="Valor estimado ($ARS)">
-            <input value={form.valor} onChange={set("valor")} type="number" placeholder="0"
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-500" />
+          <Field label="Email">
+            <input value={form.email} onChange={set("email")} type="email" placeholder="reservas@agencia.com"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
           </Field>
+          <Field label="Teléfono">
+            <input value={form.telefono} onChange={set("telefono")} placeholder="+54 11 ..."
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
+          </Field>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Estado">
+              <select value={form.estado} onChange={set("estado")}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+                <option>Prospecto</option><option>Activa</option><option>Inactiva</option>
+              </select>
+            </Field>
+            <Field label="Ejecutivo">
+              <select value={form.ejecutivo} onChange={set("ejecutivo")}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+                {EJECUTIVOS.map((v) => <option key={v}>{v}</option>)}
+              </select>
+            </Field>
+          </div>
         </div>
         <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
-          <button onClick={onClose}
-            className="flex-1 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg py-2 hover:bg-slate-50">
+          <button onClick={onClose} className="flex-1 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg py-2 hover:bg-slate-50">
             Cancelar
           </button>
-          <button onClick={submit}
-            className="flex-1 text-sm font-medium text-white bg-blue-600 rounded-lg py-2 hover:bg-blue-700">
-            Guardar lead
+          <button onClick={submit} className="flex-1 text-sm font-medium text-white rounded-lg py-2 hover:opacity-90" style={{ background: BRAND.abismo }}>
+            Crear agencia
           </button>
         </div>
       </div>
@@ -392,14 +655,157 @@ function Field({ label, children }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// Vista: Pipeline (Kanban)
-// ─────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════
+// VISTA: Mapa de zonas (mapa de calor del canal)
+// ═════════════════════════════════════════════════════════════
+
+// Proyección lineal simple lat/lng → coordenadas del viewBox del SVG.
+// Caja geográfica que cubre Argentina continental.
+const GEO = { latTop: -21.0, latBottom: -55.5, lngLeft: -74.5, lngRight: -52.5 };
+const VIEW = { w: 360, h: 620 };
+const proj = (lat, lng) => ({
+  x: ((lng - GEO.lngLeft) / (GEO.lngRight - GEO.lngLeft)) * VIEW.w,
+  y: ((lat - GEO.latTop) / (GEO.latBottom - GEO.latTop)) * VIEW.h,
+});
+
+// Contorno simplificado de Argentina (suficiente para ubicar zonas)
+const AR_PATH =
+  "M135.4,14.1 L129.0,21.6 L122.5,29.8 L99.1,64.7 L99.3,70.2 L98.7,74.7 L96.9,79.4 L100.2,93.1 L98.5,108.8 L92.5,111.6 L90.1,117.2 L85.6,126.0 L81.4,131.7 L79.0,136.3 L77.7,142.6 L73.5,149.3 L75.6,156.3 L75.0,162.1 L76.7,164.9 L73.8,168.6 L70.1,172.2 L68.3,178.5 L66.3,181.3 L64.7,187.6 L66.2,194.9 L67.5,198.1 L69.9,203.9 L71.6,211.3 L72.5,216.9 L75.7,220.6 L75.5,227.8 L76.1,234.6 L72.3,242.2 L69.6,248.0 L64.1,256.4 L67.2,260.8 L67.4,266.8 L66.2,272.6 L62.4,274.6 L59.4,276.7 L56.5,280.6 L54.5,285.0 L55.0,288.3 L54.1,294.0 L54.1,298.9 L56.4,305.3 L58.0,313.6 L54.9,319.8 L50.7,324.2 L50.9,329.3 L49.4,333.8 L45.8,334.8 L46.0,338.3 L46.4,343.2 L43.7,345.6 L45.8,348.9 L43.8,351.9 L43.2,358.4 L43.6,361.5 L42.9,364.8 L43.6,369.2 L43.8,371.4 L44.7,376.5 L44.1,380.0 L39.6,379.7 L38.7,384.3 L39.3,388.9 L39.0,393.8 L42.8,397.6 L44.8,400.8 L43.3,404.0 L47.2,407.5 L45.7,410.8 L43.4,416.2 L44.0,420.8 L50.0,420.4 L55.6,423.6 L53.9,426.2 L47.7,426.9 L42.1,427.7 L40.3,429.5 L43.9,429.9 L49.1,432.5 L51.9,436.8 L49.0,439.7 L45.9,440.9 L44.7,442.9 L44.7,446.3 L45.9,450.5 L43.1,452.8 L46.7,461.6 L42.1,466.8 L43.1,470.2 L40.0,473.4 L36.3,475.3 L35.3,478.7 L32.3,480.5 L33.9,484.6 L35.8,488.4 L35.2,492.2 L32.3,499.5 L24.9,503.6 L15.6,519.4 L18.5,526.6 L21.4,534.4 L30.4,533.0 L35.3,534.7 L36.7,544.1 L35.7,550.3 L40.3,556.4 L94.7,562.2 L91.1,550.3 L110.8,518.7 L121.9,497.4 L140.3,488.0 L144.5,475.6 L114.2,456.1 L131.4,433.4 L146.5,431.1 L151.0,416.8 L159.2,399.0 L167.1,389.0 L165.4,381.5 L154.9,377.2 L174.3,362.4 L201.7,347.6 L200.6,346.1 L204.3,331.7 L228.9,322.7 L289.5,274.7 L268.2,238.8 L263.4,220.1 L267.6,210.9 L268.8,194.3 L272.2,180.0 L275.7,165.0 L287.0,154.5 L296.2,144.0 L304.9,132.3 L313.1,126.4 L320.6,121.2 L328.2,116.3 L332.8,113.1 L338.3,110.5 L339.1,108.3 L340.4,106.5 L340.3,104.3 L339.9,102.3 L340.0,99.5 L340.4,96.5 L338.6,89.6 L337.9,87.8 L338.2,85.9 L337.9,84.3 L336.6,83.1 L333.8,83.0 L330.1,82.0 L325.7,82.9 L324.4,92.6 L321.4,101.7 L314.2,107.1 L309.4,112.8 L298.0,116.4 L291.1,116.8 L283.9,116.5 L272.1,112.8 L260.3,111.7 L262.3,107.9 L265.8,101.5 L267.5,95.9 L272.5,89.9 L274.4,83.5 L274.9,77.1 L267.8,72.0 L263.0,70.4 L255.6,67.0 L247.5,61.6 L231.0,53.9 L223.1,51.2 L216.4,44.7 L212.5,42.3 L206.0,37.1 L203.9,34.3 L202.1,31.7 L200.6,29.1 L197.9,26.0 L194.2,22.5 L191.3,18.6 L171.8,20.6 L168.8,26.5 L166.5,33.7 L164.8,28.5 L163.1,23.2 L145.4,19.8 L135.4,14.1 Z";
+
+function MapaZonas({ agencias }) {
+  const [metrica, setMetrica] = useState("facturacion"); // facturacion | pax
+  const [hover, setHover] = useState(null);
+
+  const zonas = useMemo(() => resumenPorZona(agencias), [agencias]);
+  const maxVal = Math.max(...zonas.map((z) => z[metrica]), 1);
+
+  const radio = (val) => 8 + (val / maxVal) * 30; // 8..38 px
+  const totalFact = zonas.reduce((s, z) => s + z.facturacion, 0);
+  const totalPaxC = zonas.reduce((s, z) => s + z.pax, 0);
+
+  return (
+    <div className="space-y-5">
+      {/* Selector de métrica */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+        <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5 w-fit">
+          {[
+            { k: "facturacion", lbl: "Facturación" },
+            { k: "pax", lbl: "Pasajeros" },
+          ].map((o) => (
+            <button key={o.k} onClick={() => setMetrica(o.k)}
+              className="text-sm font-medium px-4 py-1.5 rounded-md transition-colors"
+              style={metrica === o.k
+                ? { background: "#fff", color: BRAND.abismo, boxShadow: "0 1px 2px rgba(0,0,0,0.06)" }
+                : { color: "#64748b", background: "transparent" }}>
+              {o.lbl}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-3 text-sm">
+          <span className="text-slate-500">Total canal:</span>
+          <span className="font-semibold text-slate-800">{fmt(totalFact)}</span>
+          <span className="text-slate-300">·</span>
+          <span className="font-semibold text-slate-800">{totalPaxC.toLocaleString("es-AR")} pax</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
+        {/* Mapa */}
+        <div className="lg:col-span-3 bg-white rounded-xl border border-slate-200 p-4 relative">
+          <div className="relative">
+            <svg viewBox={`0 0 ${VIEW.w} ${VIEW.h}`} className="w-full" style={{ maxHeight: 560 }}>
+              {/* Fondo agua */}
+              <rect x="0" y="0" width={VIEW.w} height={VIEW.h} fill={BRAND.espuma} rx="12" />
+              {/* País */}
+              <path d={AR_PATH} fill="#ffffff" stroke="#cbd5e1" strokeWidth="1.5" />
+
+              {/* Burbujas por zona */}
+              {zonas.map((z) => {
+                const p = proj(z.lat, z.lng);
+                const re = radio(z[metrica]);
+                const active = hover === z.zona;
+                return (
+                  <g key={z.zona}
+                    onMouseEnter={() => setHover(z.zona)}
+                    onMouseLeave={() => setHover(null)}
+                    style={{ cursor: "pointer" }}>
+                    <circle cx={p.x} cy={p.y} r={re}
+                      fill={BRAND.turquesa} fillOpacity={active ? 0.5 : 0.32}
+                      stroke={BRAND.marea} strokeWidth={active ? 2 : 1.5} />
+                    <circle cx={p.x} cy={p.y} r={3} fill={BRAND.marea} />
+                  </g>
+                );
+              })}
+
+              {/* Tooltip */}
+              {hover && (() => {
+                const z = zonas.find((x) => x.zona === hover);
+                const p = proj(z.lat, z.lng);
+                const boxW = 150, boxH = 64;
+                let bx = p.x + 12, by = p.y - boxH - 8;
+                if (bx + boxW > VIEW.w) bx = p.x - boxW - 12;
+                if (by < 0) by = p.y + 12;
+                return (
+                  <g>
+                    <rect x={bx} y={by} width={boxW} height={boxH} rx="8"
+                      fill={BRAND.abismo} fillOpacity="0.96" />
+                    <text x={bx + 12} y={by + 20} fill="#fff" fontSize="11" fontWeight="700">{z.label}</text>
+                    <text x={bx + 12} y={by + 38} fill="#cbd5e1" fontSize="10">{fmt(z.facturacion)}</text>
+                    <text x={bx + 12} y={by + 53} fill="#cbd5e1" fontSize="10">{z.pax} pax · {z.agencias} ag.</text>
+                  </g>
+                );
+              })()}
+            </svg>
+            <p className="text-xs text-slate-400 text-center mt-2">
+              El tamaño de cada burbuja representa {metrica === "facturacion" ? "la facturación" : "los pasajeros"} de la zona. Pasá el mouse para ver el detalle.
+            </p>
+          </div>
+        </div>
+
+        {/* Ranking de zonas */}
+        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <div className="px-5 py-4 border-b border-slate-100">
+            <h3 className="font-semibold text-slate-800">Zonas por {metrica === "facturacion" ? "facturación" : "pasajeros"}</h3>
+            <p className="text-sm text-slate-500 mt-0.5">Ordenadas de mayor a menor</p>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {[...zonas].sort((a, b) => b[metrica] - a[metrica]).map((z, i) => {
+              const val = z[metrica];
+              return (
+                <div key={z.zona}
+                  onMouseEnter={() => setHover(z.zona)}
+                  onMouseLeave={() => setHover(null)}
+                  className="px-5 py-3.5 transition-colors"
+                  style={{ background: hover === z.zona ? BRAND.espuma : "transparent" }}>
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm font-bold text-slate-300 w-4">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-slate-800 text-sm truncate">{z.label}</p>
+                      <p className="text-xs text-slate-400">{z.agencias} {z.agencias === 1 ? "agencia" : "agencias"} · {z.activas} activas</p>
+                    </div>
+                    <span className="text-sm font-semibold text-slate-700 whitespace-nowrap">
+                      {metrica === "facturacion" ? fmt(val) : `${val} pax`}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all"
+                      style={{ width: (val / maxVal * 100) + "%", background: BRAND.turquesa }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
 function Pipeline({ pipeline, moverTarjeta }) {
   const [dragId, setDragId] = useState(null);
-
   const totalPorEtapa = (key) =>
-    pipeline.filter((p) => p.etapa === key).reduce((s, p) => s + p.valor, 0);
+    pipeline.filter((p) => p.etapa === key).reduce((s, p) => s + p.valorMes, 0);
 
   return (
     <div>
@@ -411,22 +817,43 @@ function Pipeline({ pipeline, moverTarjeta }) {
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => { if (dragId != null) { moverTarjeta(dragId, etapa.key); setDragId(null); } }}
               className="bg-slate-100/70 rounded-xl p-3 min-h-[200px]">
-              <div className="flex items-center justify-between mb-3 px-1">
+              <div className="flex items-center justify-between mb-2 px-1">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full" style={{ background: etapa.color }} />
                   <h4 className="text-sm font-semibold text-slate-700">{etapa.label}</h4>
                 </div>
-                <span className="text-xs font-medium text-slate-500 bg-white px-2 py-0.5 rounded-full">
-                  {cards.length}
-                </span>
+                <span className="text-xs font-medium text-slate-500 bg-white px-2 py-0.5 rounded-full">{cards.length}</span>
               </div>
-              <p className="text-xs text-slate-500 mb-3 px-1 font-medium">{fmt(totalPorEtapa(etapa.key))}</p>
-
+              <p className="text-xs text-slate-500 mb-3 px-1 font-medium">{fmt(totalPorEtapa(etapa.key))}/mes</p>
               <div className="space-y-2.5">
-                {cards.map((c) => (
-                  <KanbanCard key={c.id} card={c} etapa={etapa}
-                    onDragStart={() => setDragId(c.id)} mover={moverTarjeta} />
-                ))}
+                {cards.map((c) => {
+                  const idx = ETAPAS.findIndex((e) => e.key === etapa.key);
+                  return (
+                    <div key={c.id} draggable onDragStart={() => setDragId(c.id)}
+                      className="bg-white rounded-lg border border-slate-200 p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group"
+                      style={{ borderLeft: `3px solid ${etapa.color}` }}>
+                      <p className="font-medium text-slate-800 text-sm leading-tight">{c.agencia}</p>
+                      <p className="text-xs text-slate-400 flex items-center gap-1 mt-1"><MapPin size={11} /> {c.ciudad}</p>
+                      <p className="text-base font-bold text-slate-800 mt-2">{fmt(c.valorMes)}<span className="text-xs font-normal text-slate-400">/mes</span></p>
+                      <div className="flex items-center gap-1.5 mt-2.5">
+                        <Avatar name={c.ejecutivo} size={20} />
+                        <span className="text-xs text-slate-500">{c.ejecutivo}</span>
+                      </div>
+                      <div className="flex gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {idx > 0 && (
+                          <button onClick={() => moverTarjeta(c.id, ETAPAS[idx - 1].key)}
+                            className="text-xs flex-1 py-1 rounded border border-slate-200 text-slate-500 hover:bg-slate-50">← Atrás</button>
+                        )}
+                        {idx < ETAPAS.length - 1 && (
+                          <button onClick={() => moverTarjeta(c.id, ETAPAS[idx + 1].key)}
+                            className="text-xs flex-1 py-1 rounded border border-slate-200 text-slate-500 hover:bg-slate-50 inline-flex items-center justify-center gap-1">
+                            Avanzar <ArrowRight size={11} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
                 {cards.length === 0 && (
                   <div className="text-center text-xs text-slate-400 py-6 border-2 border-dashed border-slate-200 rounded-lg">
                     Arrastrá tarjetas aquí
@@ -438,96 +865,60 @@ function Pipeline({ pipeline, moverTarjeta }) {
         })}
       </div>
       <p className="text-xs text-slate-400 mt-4 text-center">
-        Arrastrá las tarjetas entre columnas o usá las flechas para cambiar de etapa.
+        Arrastrá las tarjetas entre columnas o usá las flechas para mover una agencia de etapa.
       </p>
     </div>
   );
 }
 
-function KanbanCard({ card, etapa, onDragStart, mover }) {
-  const idx = ETAPAS.findIndex((e) => e.key === etapa.key);
-  return (
-    <div draggable onDragStart={onDragStart}
-      className="bg-white rounded-lg border border-slate-200 p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group"
-      style={{ borderLeft: `3px solid ${etapa.color}` }}>
-      <div className="flex items-start justify-between">
-        <p className="font-medium text-slate-800 text-sm leading-tight">{card.cliente}</p>
-      </div>
-      <p className="text-lg font-bold text-slate-800 mt-2">{fmt(card.valor)}</p>
-      <div className="flex items-center gap-1.5 mt-2.5">
-        <Avatar name={card.vendedor} size={20} />
-        <span className="text-xs text-slate-500">{card.vendedor}</span>
-      </div>
-      <div className="flex gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-        {idx > 0 && (
-          <button onClick={() => mover(card.id, ETAPAS[idx - 1].key)}
-            className="text-xs flex-1 py-1 rounded border border-slate-200 text-slate-500 hover:bg-slate-50">
-            ← Atrás
-          </button>
-        )}
-        {idx < ETAPAS.length - 1 && (
-          <button onClick={() => mover(card.id, ETAPAS[idx + 1].key)}
-            className="text-xs flex-1 py-1 rounded border border-slate-200 text-slate-500 hover:bg-slate-50 inline-flex items-center justify-center gap-1">
-            Avanzar <ArrowRight size={11} />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-}
+// ═════════════════════════════════════════════════════════════
+// VISTA: Distribución (equipo)
+// ═════════════════════════════════════════════════════════════
+function Distribucion({ agencias }) {
+  const [activos, setActivos] = useState(Object.fromEntries(EJECUTIVOS.map((v) => [v, true])));
+  const [roundRobin, setRoundRobin] = useState(false);
 
-// ─────────────────────────────────────────────────────────────
-// Vista: Configuración / Distribución
-// ─────────────────────────────────────────────────────────────
-function Configuracion({ leads, roundRobin, setRoundRobin }) {
-  const [activos, setActivos] = useState(
-    Object.fromEntries(VENDEDORES.map((v) => [v, true]))
-  );
-
-  const leadsPorVendedor = (v) =>
-    leads.filter((l) => l.vendedor === v).length;
+  const agenciasDe = (v) => agencias.filter((a) => a.ejecutivo === v);
+  const paxDe = (v) => agenciasDe(v).reduce((s, a) => s + totalPax(a), 0);
+  const maxPax = Math.max(...EJECUTIVOS.map(paxDe), 1);
 
   return (
     <div className="space-y-6 max-w-3xl">
-      {/* Round Robin */}
       <div className="bg-white rounded-xl border border-slate-200 p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-3">
-            <div className="p-2.5 rounded-lg bg-emerald-50">
-              <Zap size={20} className="text-emerald-600" />
+            <div className="p-2.5 rounded-lg" style={{ background: BRAND.espuma }}>
+              <Zap size={20} style={{ color: BRAND.turquesa }} />
             </div>
             <div>
               <h3 className="font-semibold text-slate-800">Asignación automática (Round Robin)</h3>
               <p className="text-sm text-slate-500 mt-1 max-w-md">
-                Distribuye los leads entrantes de forma equitativa entre los vendedores activos, en orden rotativo.
+                Reparte las nuevas agencias de forma equitativa entre los ejecutivos activos, en orden rotativo.
               </p>
             </div>
           </div>
           <button onClick={() => setRoundRobin(!roundRobin)}
-            className={`relative w-12 h-7 rounded-full transition-colors shrink-0 ${
-              roundRobin ? "bg-emerald-500" : "bg-slate-300"
-            }`}>
-            <span className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform shadow ${
-              roundRobin ? "translate-x-5" : ""
-            }`} />
+            className="relative w-12 h-7 rounded-full transition-colors shrink-0"
+            style={{ background: roundRobin ? BRAND.verdeOk : "#cbd5e1" }}>
+            <span className={`absolute top-1 left-1 w-5 h-5 bg-white rounded-full transition-transform shadow ${roundRobin ? "translate-x-5" : ""}`} />
           </button>
         </div>
         {roundRobin && (
           <div className="mt-4 text-sm text-emerald-700 bg-emerald-50 rounded-lg px-4 py-2.5 flex items-center gap-2">
-            <Zap size={15} /> Round Robin activo — los nuevos leads se reparten automáticamente.
+            <Zap size={15} /> Round Robin activo — las nuevas agencias se reparten automáticamente.
           </div>
         )}
       </div>
 
-      {/* Equipo */}
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
         <div className="px-6 py-4 border-b border-slate-100">
-          <h3 className="font-semibold text-slate-800">Equipo comercial</h3>
-          <p className="text-sm text-slate-500 mt-0.5">Carga de leads activos por vendedor</p>
+          <h3 className="font-semibold text-slate-800">Equipo de cuentas</h3>
+          <p className="text-sm text-slate-500 mt-0.5">Carga de agencias y pasajeros por ejecutivo</p>
         </div>
         <div className="divide-y divide-slate-100">
-          {VENDEDORES.map((v) => {
-            const carga = leadsPorVendedor(v);
+          {EJECUTIVOS.map((v) => {
+            const nAg = agenciasDe(v).length;
+            const pax = paxDe(v);
             return (
               <div key={v} className="flex items-center justify-between px-6 py-4">
                 <div className="flex items-center gap-3">
@@ -535,20 +926,17 @@ function Configuracion({ leads, roundRobin, setRoundRobin }) {
                   <div>
                     <p className="font-medium text-slate-800">{v}</p>
                     <p className="text-xs text-slate-500">
-                      {carga} {carga === 1 ? "lead activo" : "leads activos"}
+                      {nAg} {nAg === 1 ? "agencia" : "agencias"} · {pax} pasajeros
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden hidden sm:block">
-                    <div className="h-full bg-blue-500 rounded-full transition-all"
-                      style={{ width: Math.min(carga / 4 * 100, 100) + "%" }} />
+                    <div className="h-full rounded-full transition-all" style={{ width: (pax / maxPax * 100) + "%", background: BRAND.turquesa }} />
                   </div>
                   <button onClick={() => setActivos({ ...activos, [v]: !activos[v] })}
                     className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-                      activos[v]
-                        ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                        : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                      activos[v] ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                     }`}>
                     {activos[v] ? "Activo" : "Inactivo"}
                   </button>
@@ -562,62 +950,54 @@ function Configuracion({ leads, roundRobin, setRoundRobin }) {
   );
 }
 
-// ─────────────────────────────────────────────────────────────
-// App principal
-// ─────────────────────────────────────────────────────────────
+// ═════════════════════════════════════════════════════════════
+// APP PRINCIPAL
+// ═════════════════════════════════════════════════════════════
 const NAV = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { key: "marketing", label: "Marketing", icon: Megaphone },
-  { key: "pipeline", label: "Pipeline", icon: KanbanSquare },
-  { key: "config", label: "Distribución", icon: Settings },
+  { key: "agencias", label: "Agencias", icon: Building2 },
+  { key: "mapa", label: "Mapa de zonas", icon: MapIcon },
+  { key: "pipeline", label: "Captación", icon: KanbanSquare },
+  { key: "distribucion", label: "Equipo", icon: Users },
 ];
 
 export default function App() {
+  const [usuario, setUsuario] = useState(null);
   const [vista, setVista] = useState("dashboard");
-  const [leads, setLeads] = useState(LEADS_INICIALES);
+  const [agencias, setAgencias] = useState(AGENCIAS);
   const [pipeline, setPipeline] = useState(PIPELINE_INICIAL);
-  const [roundRobin, setRoundRobin] = useState(false);
-  const [rrIndex, setRrIndex] = useState(0);
 
-  const addLead = (lead) => {
-    let vendedor = lead.vendedor;
-    if (roundRobin) {
-      vendedor = VENDEDORES[rrIndex % VENDEDORES.length];
-      setRrIndex(rrIndex + 1);
-    }
-    const nuevo = { ...lead, vendedor, id: Date.now() };
-    setLeads([nuevo, ...leads]);
-    setPipeline([
-      { id: Date.now() + 1, cliente: lead.nombre, valor: lead.valor, vendedor, etapa: "calificacion" },
-      ...pipeline,
-    ]);
+  if (!usuario) return <Login onLogin={setUsuario} />;
+
+  const addAgencia = (a) => {
+    const geo = geoDeCiudad(a.ciudad, Date.now());
+    setAgencias([{ ...a, id: Date.now(), reservas: [], visitas: [], ...geo }, ...agencias]);
   };
 
-  const updateEstado = (id, estado) =>
-    setLeads(leads.map((l) => (l.id === id ? { ...l, estado } : l)));
+  const addVisita = (agId, visita) =>
+    setAgencias(agencias.map((a) =>
+      a.id === agId
+        ? { ...a, visitas: [{ ...visita, id: `vis-${Date.now()}` }, ...(a.visitas || [])] }
+        : a
+    ));
 
   const moverTarjeta = (id, etapa) =>
     setPipeline(pipeline.map((p) => (p.id === id ? { ...p, etapa } : p)));
 
   const titulos = {
-    dashboard: { t: "Dashboard General", s: "Visión unificada de Marketing y Ventas" },
-    marketing: { t: "Gestión de Leads", s: "Captación y seguimiento de prospectos" },
-    pipeline: { t: "Pipeline Comercial", s: "Embudo de conversión de ventas" },
-    config: { t: "Distribución de Leads", s: "Equipo comercial y asignación" },
+    dashboard: { t: "Dashboard del canal", s: "Visión general de agencias y pasajeros" },
+    agencias: { t: "Gestión de agencias", s: "Detalle, histórico y reservas por agencia" },
+    mapa: { t: "Mapa de zonas", s: "Valor económico y pasajeros por región" },
+    pipeline: { t: "Captación de agencias", s: "Pipeline de alta de nuevos operadores" },
+    distribucion: { t: "Equipo de cuentas", s: "Asignación y carga por ejecutivo" },
   };
 
   return (
     <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900">
       {/* Sidebar */}
-      <aside className="w-60 bg-slate-900 flex flex-col fixed h-full">
-        <div className="px-6 py-6 flex items-center gap-2.5 border-b border-slate-800">
-          <div className="w-9 h-9 bg-gradient-to-br from-blue-500 to-emerald-500 rounded-lg flex items-center justify-center">
-            <TrendingUp size={20} className="text-white" />
-          </div>
-          <div>
-            <p className="font-bold text-white tracking-tight">NexusCRM</p>
-            <p className="text-[11px] text-slate-400">Marketing & Ventas</p>
-          </div>
+      <aside className="w-60 flex flex-col fixed h-full" style={{ background: BRAND.abismo }}>
+        <div className="px-5 py-5 border-b border-white/10">
+          <Logo size={34} light />
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1">
@@ -625,9 +1005,12 @@ export default function App() {
             const active = vista === item.key;
             return (
               <button key={item.key} onClick={() => setVista(item.key)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  active ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white hover:bg-slate-800"
-                }`}>
+                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
+                style={active
+                  ? { background: BRAND.turquesa, color: "#fff" }
+                  : { color: "rgba(255,255,255,0.6)" }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}>
                 <item.icon size={18} /> {item.label}
                 {active && <ChevronRight size={16} className="ml-auto" />}
               </button>
@@ -635,14 +1018,18 @@ export default function App() {
           })}
         </nav>
 
-        <div className="px-3 py-4 border-t border-slate-800">
-          <div className="flex items-center gap-3 px-3 py-2">
-            <Avatar name="Admin Tigre" size={36} />
-            <div className="min-w-0">
-              <p className="text-sm font-medium text-white truncate">Admin Tigre</p>
-              <p className="text-xs text-slate-400 truncate">Gerente Comercial</p>
+        <div className="px-3 py-4 border-t border-white/10">
+          <div className="flex items-center gap-3 px-2 py-2">
+            <Avatar name={usuario.nombre} size={36} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-white truncate">{usuario.nombre}</p>
+              <p className="text-xs text-white/50 truncate">{usuario.rol}</p>
             </div>
           </div>
+          <button onClick={() => setUsuario(null)}
+            className="w-full flex items-center gap-2 px-2 py-2 mt-1 rounded-lg text-sm font-medium text-white/60 hover:text-white hover:bg-white/6 transition-colors">
+            <LogOut size={16} /> Cerrar sesión
+          </button>
         </div>
       </aside>
 
@@ -654,10 +1041,11 @@ export default function App() {
         </header>
 
         <div className="p-8">
-          {vista === "dashboard" && <Dashboard leads={leads} pipeline={pipeline} />}
-          {vista === "marketing" && <Marketing leads={leads} addLead={addLead} updateEstado={updateEstado} />}
+          {vista === "dashboard" && <Dashboard agencias={agencias} />}
+          {vista === "agencias" && <Agencias agencias={agencias} addAgencia={addAgencia} addVisita={addVisita} />}
+          {vista === "mapa" && <MapaZonas agencias={agencias} />}
           {vista === "pipeline" && <Pipeline pipeline={pipeline} moverTarjeta={moverTarjeta} />}
-          {vista === "config" && <Configuracion leads={leads} roundRobin={roundRobin} setRoundRobin={setRoundRobin} />}
+          {vista === "distribucion" && <Distribucion agencias={agencias} />}
         </div>
       </main>
     </div>
