@@ -37,6 +37,24 @@ export const EXCURSIONES = [
   { id: "temaiken",        nombre: "Entrada a Temaikén",           salida: "Bus turístico",         duracion: "Día completo", tarifa: 52800, color: "#0d9488" },
 ];
 
+// Catálogo editable de productos (arranca igual que EXCURSIONES; se puede ampliar)
+export const PRODUCTOS_INICIALES = EXCURSIONES.map((e) => ({
+  id: e.id, nombre: e.nombre, salida: e.salida, duracion: e.duracion,
+  precioBase: e.tarifa, color: e.color, activo: true,
+}));
+
+// Facilidades / condiciones de pago disponibles en el canal
+export const CONDICIONES_PAGO = [
+  "Contado",
+  "Cuenta corriente 30 días",
+  "Cuenta corriente 60 días",
+  "50% seña + 50% contra servicio",
+  "Tarjeta de crédito",
+  "Transferencia anticipada",
+];
+
+
+
 // Estados de una agencia dentro del canal
 export const ESTADOS_AGENCIA = {
   Activa:     { color: "#16a34a", bg: "#dcfce7", label: "Activa" },
@@ -104,6 +122,16 @@ export const AGENCIAS = [
     ciudad: "CABA", direccion: "Av. Corrientes 1234, CABA",
     zona: "CABA", lat: -34.6037, lng: -58.3816,
     estado: "Activa", ejecutivo: "Lucía Fernández", desde: "2024-03-12",
+    condicionPago: "Cuenta corriente 30 días",
+    precios: {
+      "delta-premium": 46800,
+      "paseo-5-rios": 19100,
+      "paseo-3-rios": 19100,
+      "paseo-6-rios": 25100,
+      "martin-garcia": 95200,
+      "postales-bsas": 19100,
+      "temaiken": 44900
+    },
     reservas: [
       r("2026-06-19", "delta-premium", 14, "Lucía Fernández"),
       r("2026-06-15", "martin-garcia", 8, "Lucía Fernández"),
@@ -123,6 +151,16 @@ export const AGENCIAS = [
     ciudad: "CABA", direccion: "Florida 537, CABA",
     zona: "CABA", lat: -34.5998, lng: -58.3742,
     estado: "Activa", ejecutivo: "Martín Gómez", desde: "2023-11-05",
+    condicionPago: "Cuenta corriente 60 días",
+    precios: {
+      "delta-premium": 44000,
+      "paseo-5-rios": 18000,
+      "paseo-3-rios": 18000,
+      "paseo-6-rios": 23600,
+      "martin-garcia": 89600,
+      "postales-bsas": 18000,
+      "temaiken": 42200
+    },
     reservas: [
       r("2026-06-20", "postales-bsas", 35, "Martín Gómez"),
       r("2026-06-18", "delta-premium", 20, "Martín Gómez"),
@@ -140,6 +178,16 @@ export const AGENCIAS = [
     ciudad: "Tigre", direccion: "Av. Cazón 1450, Tigre",
     zona: "GBA Norte", lat: -34.4264, lng: -58.5796,
     estado: "Activa", ejecutivo: "Sofía Ruiz", desde: "2024-07-21",
+    condicionPago: "50% seña + 50% contra servicio",
+    precios: {
+      "delta-premium": 48400,
+      "paseo-5-rios": 19800,
+      "paseo-3-rios": 19800,
+      "paseo-6-rios": 26000,
+      "martin-garcia": 98600,
+      "postales-bsas": 19800,
+      "temaiken": 46500
+    },
     reservas: [
       r("2026-06-21", "paseo-5-rios", 28, "Sofía Ruiz"),
       r("2026-06-17", "paseo-6-rios", 19, "Sofía Ruiz"),
@@ -157,6 +205,16 @@ export const AGENCIAS = [
     ciudad: "Bariloche", direccion: "Mitre 320, San Carlos de Bariloche",
     zona: "Patagonia", lat: -41.1335, lng: -71.3103,
     estado: "Prospecto", ejecutivo: "Diego Torres", desde: "2026-06-01",
+    condicionPago: "Transferencia anticipada",
+    precios: {
+      "delta-premium": 52200,
+      "paseo-5-rios": 21400,
+      "paseo-3-rios": 21400,
+      "paseo-6-rios": 28000,
+      "martin-garcia": 106400,
+      "postales-bsas": 21400,
+      "temaiken": 50200
+    },
     reservas: [
       r("2026-06-12", "martin-garcia", 6, "Diego Torres", "Pendiente"),
     ],
@@ -170,6 +228,16 @@ export const AGENCIAS = [
     ciudad: "CABA", direccion: "Av. de Mayo 760, CABA",
     zona: "CABA", lat: -34.6086, lng: -58.3776,
     estado: "Activa", ejecutivo: "Lucía Fernández", desde: "2025-01-18",
+    condicionPago: "Contado",
+    precios: {
+      "delta-premium": 49500,
+      "paseo-5-rios": 20200,
+      "paseo-3-rios": 20200,
+      "paseo-6-rios": 26600,
+      "martin-garcia": 100800,
+      "postales-bsas": 20200,
+      "temaiken": 47500
+    },
     reservas: [
       r("2026-06-16", "temaiken", 22, "Lucía Fernández"),
       r("2026-06-05", "postales-bsas", 30, "Lucía Fernández"),
@@ -185,6 +253,16 @@ export const AGENCIAS = [
     ciudad: "Salta", direccion: "España 650, Salta Capital",
     zona: "NOA", lat: -24.7821, lng: -65.4232,
     estado: "Inactiva", ejecutivo: "Martín Gómez", desde: "2024-02-09",
+    condicionPago: "Cuenta corriente 30 días",
+    precios: {
+      "delta-premium": 50600,
+      "paseo-5-rios": 20700,
+      "paseo-3-rios": 20700,
+      "paseo-6-rios": 27100,
+      "martin-garcia": 103000,
+      "postales-bsas": 20700,
+      "temaiken": 48600
+    },
     reservas: [
       r("2026-03-14", "paseo-5-rios", 18, "Martín Gómez"),
       r("2026-02-28", "paseo-3-rios", 12, "Martín Gómez"),
@@ -244,4 +322,59 @@ export const resumenPorZona = (agencias) => {
     if (ag.estado === "Activa") acc[zonaKey].activas += 1;
   }
   return Object.values(acc).sort((a, b) => b.facturacion - a.facturacion);
+};
+
+// ─────────────────────────────────────────────────────────────
+// Precio de un producto para una agencia (precio acordado o base)
+// ─────────────────────────────────────────────────────────────
+export const precioAgencia = (ag, productoId, productos) => {
+  if (ag.precios && ag.precios[productoId] != null) return ag.precios[productoId];
+  const p = (productos || []).find((x) => x.id === productoId);
+  return p ? p.precioBase : 0;
+};
+
+// ─────────────────────────────────────────────────────────────
+// IMPORTADOR del Excel anual de Sturla.
+// Lee la hoja "AGENCIAS <año>": col 0 = nombre de agencia,
+// y 12 bloques de mes (cada uno 5 columnas; la 1ª es el año actual).
+// Devuelve un array de { nombre, total, meses{} } ordenado por total desc.
+// Recibe un workbook ya parseado por SheetJS (XLSX.read).
+// ─────────────────────────────────────────────────────────────
+const MESES_IMP = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+const EXCLUIR_IMP = new Set(["B O L E T E R A >", "PARTICULARES >", " ", ""]);
+
+export const parseRankingWorkbook = (workbook, XLSX) => {
+  // Elegir la hoja de agencias del año más reciente disponible
+  const hojas = workbook.SheetNames.filter((s) => /AGENCIAS/i.test(s));
+  if (!hojas.length) return { error: "No encontré ninguna hoja que se llame 'AGENCIAS <año>'.", agencias: [] };
+  // Ordenar por año descendente
+  hojas.sort((a, b) => {
+    const ya = parseInt((a.match(/\d{4}/) || [0])[0]);
+    const yb = parseInt((b.match(/\d{4}/) || [0])[0]);
+    return yb - ya;
+  });
+  const hoja = hojas[0];
+  const anio = (hoja.match(/\d{4}/) || ["—"])[0];
+  const ws = workbook.Sheets[hoja];
+  const filas = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+  const colActual = MESES_IMP.map((_, i) => 1 + i * 5); // 1,6,11,...
+  const out = [];
+  for (let i = 4; i < filas.length; i++) {
+    const fila = filas[i] || [];
+    const nombre = (fila[0] != null ? String(fila[0]).trim() : "");
+    if (!nombre || EXCLUIR_IMP.has(nombre) || nombre === "null") continue;
+    const meses = {};
+    let total = 0;
+    colActual.forEach((c, idx) => {
+      const raw = fila[c];
+      const n = typeof raw === "number" ? Math.round(raw)
+        : (raw != null && !isNaN(parseFloat(raw)) ? Math.round(parseFloat(raw)) : 0);
+      meses[MESES_IMP[idx]] = n;
+      total += n;
+    });
+    if (total > 0) out.push({ nombre, total, meses });
+  }
+  out.sort((a, b) => b.total - a.total);
+  return { anio, hoja, agencias: out, total: out.length };
 };
