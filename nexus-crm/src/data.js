@@ -89,6 +89,8 @@ const CIUDADES = {
   "Tigre":         { zona: "GBA Norte",       lat: -34.4264, lng: -58.5796 },
   "Mar del Plata": { zona: "Costa Atlántica", lat: -38.0055, lng: -57.5426 },
   "Rosario":       { zona: "Litoral",         lat: -32.9442, lng: -60.6505 },
+  "Rafela":       { zona: "Litoral",         lat: -31.266, lng: -61.483 },
+  "San Francisco":       { zona: "Litoral",         lat: -31.4355, lng: -62.0713 },
   "Mendoza":       { zona: "Cuyo",            lat: -32.8895, lng: -68.8458 },
   "Bariloche":     { zona: "Patagonia",       lat: -41.1335, lng: -71.3103 },
   "Salta":         { zona: "NOA",             lat: -24.7821, lng: -65.4232 },
