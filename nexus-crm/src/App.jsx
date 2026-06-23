@@ -14,7 +14,7 @@ import {
 } from "recharts";
 import {
   BRAND, USUARIOS, EJECUTIVOS, EXCURSIONES, ESTADOS_AGENCIA, ETAPAS,
-  AGENCIAS, PIPELINE_INICIAL, DATOS_MENSUALES, ZONAS, fmt, totalPax,
+  AGENCIAS, DATOS_MENSUALES, ZONAS, fmt, totalPax,
   totalFacturado, geoDeCiudad, resumenPorZona, PRODUCTOS_INICIALES,
   CONDICIONES_PAGO, precioAgencia, parseRankingWorkbook,
 } from "./data";
@@ -1393,20 +1393,28 @@ function ProductoForm({ onClose, onSave }) {
   );
 }
 
-function Pipeline({ pipeline, moverTarjeta }) {
+function Pipeline({ agencias, updateAgencia }) {
   const [dragId, setDragId] = useState(null);
-  const totalPorEtapa = (key) =>
-    pipeline.filter((p) => p.etapa === key).reduce((s, p) => s + p.valorMes, 0);
+
+  // Cada agencia se ubica por su etapaCaptacion (por defecto "contacto")
+  const etapaDe = (a) => a.etapaCaptacion || "contacto";
+  const enEtapa = (key) => agencias.filter((a) => etapaDe(a) === key);
+  const paxPorEtapa = (key) => enEtapa(key).reduce((s, a) => s + totalPax(a), 0);
 
   return (
     <div>
+      {agencias.length === 0 && (
+        <div className="text-center text-slate-400 py-12 bg-white rounded-xl border border-dashed border-slate-200 mb-4">
+          Todavía no hay agencias cargadas. Agregá agencias desde la vista "Agencias" y van a aparecer acá según su etapa de captación.
+        </div>
+      )}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {ETAPAS.map((etapa) => {
-          const cards = pipeline.filter((p) => p.etapa === etapa.key);
+          const cards = enEtapa(etapa.key);
           return (
             <div key={etapa.key}
               onDragOver={(e) => e.preventDefault()}
-              onDrop={() => { if (dragId != null) { moverTarjeta(dragId, etapa.key); setDragId(null); } }}
+              onDrop={() => { if (dragId != null) { updateAgencia(dragId, { etapaCaptacion: etapa.key }); setDragId(null); } }}
               className="bg-slate-100/70 rounded-xl p-3 min-h-[200px]">
               <div className="flex items-center justify-between mb-2 px-1">
                 <div className="flex items-center gap-2">
@@ -1415,28 +1423,35 @@ function Pipeline({ pipeline, moverTarjeta }) {
                 </div>
                 <span className="text-xs font-medium text-slate-500 bg-white px-2 py-0.5 rounded-full">{cards.length}</span>
               </div>
-              <p className="text-xs text-slate-500 mb-3 px-1 font-medium">{fmt(totalPorEtapa(etapa.key))}/mes</p>
+              <p className="text-xs text-slate-500 mb-3 px-1 font-medium">{paxPorEtapa(etapa.key)} pax</p>
               <div className="space-y-2.5">
                 {cards.map((c) => {
                   const idx = ETAPAS.findIndex((e) => e.key === etapa.key);
+                  const ec = ESTADOS_AGENCIA[c.estado] || ESTADOS_AGENCIA.Prospecto;
                   return (
                     <div key={c.id} draggable onDragStart={() => setDragId(c.id)}
                       className="bg-white rounded-lg border border-slate-200 p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group"
                       style={{ borderLeft: `3px solid ${etapa.color}` }}>
-                      <p className="font-medium text-slate-800 text-sm leading-tight">{c.agencia}</p>
-                      <p className="text-xs text-slate-400 flex items-center gap-1 mt-1"><MapPin size={11} /> {c.ciudad}</p>
-                      <p className="text-base font-bold text-slate-800 mt-2">{fmt(c.valorMes)}<span className="text-xs font-normal text-slate-400">/mes</span></p>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="font-medium text-slate-800 text-sm leading-tight">{c.nombre}</p>
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0" style={{ color: ec.color, background: ec.bg }}>{ec.label}</span>
+                      </div>
+                      <p className="text-xs text-slate-400 flex items-center gap-1 mt-1"><MapPin size={11} /> {c.ciudad || "—"}</p>
+                      <div className="flex items-center gap-3 mt-2">
+                        <span className="text-sm font-bold text-slate-800">{totalPax(c)} <span className="text-xs font-normal text-slate-400">pax</span></span>
+                        <span className="text-xs text-slate-500">{fmt(totalFacturado(c))}</span>
+                      </div>
                       <div className="flex items-center gap-1.5 mt-2.5">
-                        <Avatar name={c.ejecutivo} size={20} />
-                        <span className="text-xs text-slate-500">{c.ejecutivo}</span>
+                        <Avatar name={c.ejecutivo || "—"} size={20} />
+                        <span className="text-xs text-slate-500">{c.ejecutivo || "Sin asignar"}</span>
                       </div>
                       <div className="flex gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
                         {idx > 0 && (
-                          <button onClick={() => moverTarjeta(c.id, ETAPAS[idx - 1].key)}
+                          <button onClick={() => updateAgencia(c.id, { etapaCaptacion: ETAPAS[idx - 1].key })}
                             className="text-xs flex-1 py-1 rounded border border-slate-200 text-slate-500 hover:bg-slate-50">← Atrás</button>
                         )}
                         {idx < ETAPAS.length - 1 && (
-                          <button onClick={() => moverTarjeta(c.id, ETAPAS[idx + 1].key)}
+                          <button onClick={() => updateAgencia(c.id, { etapaCaptacion: ETAPAS[idx + 1].key })}
                             className="text-xs flex-1 py-1 rounded border border-slate-200 text-slate-500 hover:bg-slate-50 inline-flex items-center justify-center gap-1">
                             Avanzar <ArrowRight size={11} />
                           </button>
@@ -1447,7 +1462,7 @@ function Pipeline({ pipeline, moverTarjeta }) {
                 })}
                 {cards.length === 0 && (
                   <div className="text-center text-xs text-slate-400 py-6 border-2 border-dashed border-slate-200 rounded-lg">
-                    Arrastrá tarjetas aquí
+                    Sin agencias en esta etapa
                   </div>
                 )}
               </div>
@@ -1456,7 +1471,7 @@ function Pipeline({ pipeline, moverTarjeta }) {
         })}
       </div>
       <p className="text-xs text-slate-400 mt-4 text-center">
-        Arrastrá las tarjetas entre columnas o usá las flechas para mover una agencia de etapa.
+        Arrastrá las tarjetas entre columnas o usá las flechas para mover una agencia de etapa. Los cambios se guardan solos.
       </p>
     </div>
   );
@@ -1603,7 +1618,6 @@ export default function App() {
   }, []);
   const [vista, setVista] = useState("dashboard");
   const [agencias, setAgencias] = useState([]);
-  const [pipeline, setPipeline] = useState(PIPELINE_INICIAL);
   const [productos, setProductos] = useState(PRODUCTOS_INICIALES);
 
   // Estado de sincronización con la nube
@@ -1760,15 +1774,12 @@ export default function App() {
     });
   };
 
-  const moverTarjeta = (id, etapa) =>
-    setPipeline(pipeline.map((p) => (p.id === id ? { ...p, etapa } : p)));
-
   const titulos = {
     dashboard: { t: "Dashboard del canal", s: "Visión general de agencias y pasajeros" },
     agencias: { t: "Gestión de agencias", s: "Detalle, histórico, precios y reservas" },
     productos: { t: "Productos y tarifas", s: "Catálogo de excursiones del canal" },
     mapa: { t: "Mapa de zonas", s: "Valor económico y pasajeros por región" },
-    pipeline: { t: "Captación de agencias", s: "Pipeline de alta de nuevos operadores" },
+    pipeline: { t: "Captación de agencias", s: "Tus agencias organizadas por etapa de captación" },
     distribucion: { t: "Equipo de cuentas", s: "Asignación y carga por ejecutivo" },
   };
 
@@ -1833,7 +1844,7 @@ export default function App() {
           {vista === "agencias" && <Agencias agencias={agencias} addAgencia={addAgencia} addVisita={addVisita} deleteAgencia={deleteAgencia} productos={productos} setPreciosAgencia={setPreciosAgencia} importarAgencias={importarAgencias} addReserva={addReserva} updateReserva={updateReserva} deleteReserva={deleteReserva} updateAgencia={updateAgencia} />}
           {vista === "productos" && <Productos productos={productos} setProductos={setProductos} />}
           {vista === "mapa" && <MapaZonas agencias={agencias} />}
-          {vista === "pipeline" && <Pipeline pipeline={pipeline} moverTarjeta={moverTarjeta} />}
+          {vista === "pipeline" && <Pipeline agencias={agencias} updateAgencia={updateAgencia} />}
           {vista === "distribucion" && <Distribucion agencias={agencias} />}
         </div>
       </main>
