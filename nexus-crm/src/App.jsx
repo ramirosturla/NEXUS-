@@ -321,7 +321,7 @@ function Dashboard({ agencias }) {
 // ═════════════════════════════════════════════════════════════
 // VISTA: Agencias (lista + detalle)
 // ═════════════════════════════════════════════════════════════
-function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, setPreciosAgencia, importarAgencias, addReserva }) {
+function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, setPreciosAgencia, importarAgencias, addReserva, updateReserva, deleteReserva, updateAgencia }) {
   const [sel, setSel] = useState(null);
   const [search, setSearch] = useState("");
   const [filtro, setFiltro] = useState("Todas");
@@ -334,7 +334,8 @@ function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, s
     if (ag) return (
       <AgenciaDetalle ag={ag} onBack={() => setSel(null)} addVisita={addVisita}
         deleteAgencia={(id) => { deleteAgencia(id); setSel(null); }}
-        productos={productos} setPreciosAgencia={setPreciosAgencia} addReserva={addReserva} />
+        productos={productos} setPreciosAgencia={setPreciosAgencia} addReserva={addReserva}
+        updateReserva={updateReserva} deleteReserva={deleteReserva} updateAgencia={updateAgencia} />
     );
   }
 
@@ -468,8 +469,73 @@ function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, s
   );
 }
 
+// Fila de reserva editable (pasajeros con +/-, recalcula monto, borrar)
+function ReservaRow({ r, ag, productos, updateReserva, deleteReserva }) {
+  const [editando, setEditando] = useState(false);
+  const [pax, setPax] = useState(r.pax);
+  const e = RESERVA_ESTADO[r.estado];
+  const Icon = e.icon;
+
+  const precioUnit = precioAgencia(ag, r.excId, productos) || (r.pax ? Math.round(r.monto / r.pax) : 0);
+
+  const guardar = () => {
+    const n = Math.max(1, parseInt(pax) || 1);
+    updateReserva(ag.id, r.id, { pax: n, monto: precioUnit * n });
+    setEditando(false);
+  };
+
+  return (
+    <tr className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
+      <td className="px-5 py-3 text-slate-500 whitespace-nowrap">{r.fecha}</td>
+      <td className="px-5 py-3 font-medium text-slate-800">{r.excursion}</td>
+      <td className="px-5 py-3">
+        {editando ? (
+          <div className="flex items-center justify-center gap-1">
+            <button onClick={() => setPax(Math.max(1, (parseInt(pax) || 1) - 1))}
+              className="w-6 h-6 rounded border border-slate-200 text-slate-500 hover:bg-slate-100 flex items-center justify-center font-bold">−</button>
+            <input value={pax} onChange={(ev) => setPax(ev.target.value)} type="number"
+              className="w-14 text-center text-sm py-1 rounded border border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/30" />
+            <button onClick={() => setPax((parseInt(pax) || 0) + 1)}
+              className="w-6 h-6 rounded border border-slate-200 text-slate-500 hover:bg-slate-100 flex items-center justify-center font-bold">+</button>
+          </div>
+        ) : (
+          <p className="text-center font-semibold text-slate-700">{r.pax}</p>
+        )}
+      </td>
+      <td className="px-5 py-3">
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full"
+          style={{ color: e.color, background: e.bg }}>
+          <Icon size={12} /> {r.estado}
+        </span>
+      </td>
+      <td className="px-5 py-3 text-right font-semibold text-slate-700 whitespace-nowrap">
+        {editando ? fmt(precioUnit * (parseInt(pax) || 0)) : fmt(r.monto)}
+      </td>
+      <td className="px-5 py-3">
+        <div className="flex items-center justify-center gap-1">
+          {editando ? (
+            <>
+              <button onClick={guardar} title="Guardar"
+                className="px-2 py-1 rounded text-xs font-medium text-white" style={{ background: BRAND.verdeOk }}>OK</button>
+              <button onClick={() => { setPax(r.pax); setEditando(false); }} title="Cancelar"
+                className="w-7 h-7 rounded hover:bg-slate-100 flex items-center justify-center text-slate-400"><X size={14} /></button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setEditando(true)} title="Editar pasajeros"
+                className="w-7 h-7 rounded hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-cyan-600"><Pencil size={14} /></button>
+              <button onClick={() => deleteReserva(ag.id, r.id)} title="Eliminar reserva"
+                className="w-7 h-7 rounded hover:bg-rose-50 flex items-center justify-center text-slate-400 hover:text-rose-600"><Trash2 size={14} /></button>
+            </>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 // Detalle de una agencia con histórico
-function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPreciosAgencia, addReserva }) {
+function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPreciosAgencia, addReserva, updateReserva, deleteReserva, updateAgencia }) {
   const [showVisita, setShowVisita] = useState(false);
   const [showPrecios, setShowPrecios] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -536,6 +602,58 @@ function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPr
         </div>
       </div>
 
+      {/* Panel de estado y captación */}
+      <div className="bg-white rounded-xl border border-slate-200 p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Estado de la agencia */}
+          <div>
+            <p className="text-xs font-semibold text-slate-500 mb-2.5 flex items-center gap-1.5">
+              <Tag size={13} /> Estado de la agencia
+            </p>
+            <div className="flex gap-2">
+              {Object.keys(ESTADOS_AGENCIA).map((est) => {
+                const c = ESTADOS_AGENCIA[est];
+                const activo = ag.estado === est;
+                return (
+                  <button key={est} onClick={() => updateAgencia(ag.id, { estado: est })}
+                    className="flex-1 text-sm font-medium py-2.5 rounded-lg border transition-all"
+                    style={activo
+                      ? { background: c.bg, color: c.color, borderColor: c.color, boxShadow: `0 0 0 1px ${c.color}` }
+                      : { background: "#fff", color: "#94a3b8", borderColor: "#e2e8f0" }}>
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Etapa de captación */}
+          <div>
+            <p className="text-xs font-semibold text-slate-500 mb-2.5 flex items-center gap-1.5">
+              <KanbanSquare size={13} /> Proceso de captación
+            </p>
+            <div className="flex items-center gap-1.5">
+              {ETAPAS.map((etapa, i) => {
+                const actual = (ag.etapaCaptacion || "contacto") === etapa.key;
+                return (
+                  <React.Fragment key={etapa.key}>
+                    <button onClick={() => updateAgencia(ag.id, { etapaCaptacion: etapa.key })}
+                      title={etapa.label}
+                      className="flex-1 text-xs font-medium py-2.5 px-1 rounded-lg border transition-all text-center leading-tight"
+                      style={actual
+                        ? { background: etapa.color + "18", color: etapa.color, borderColor: etapa.color }
+                        : { background: "#fff", color: "#94a3b8", borderColor: "#e2e8f0" }}>
+                      {etapa.label}
+                    </button>
+                    {i < ETAPAS.length - 1 && <ChevronRight size={12} className="text-slate-300 shrink-0" />}
+                  </React.Fragment>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Métricas de la agencia */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard icon={Users2} label="Pasajeros totales" value={pax} accent={BRAND.turquesa} />
@@ -543,6 +661,7 @@ function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPr
         <KpiCard icon={DollarSign} label="Facturación total" value={fmt(fact)} accent="#0891b2" />
         <KpiCard icon={CalendarClock} label="Última visita" value={ultimaVisita || "—"} accent={BRAND.sol} />
       </div>
+
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Histórico de reservas */}
@@ -557,35 +676,22 @@ function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPr
                 <tr className="border-b border-slate-200 bg-slate-50/70 text-left text-slate-500">
                   <th className="px-5 py-3 font-medium">Fecha</th>
                   <th className="px-5 py-3 font-medium">Excursión</th>
-                  <th className="px-5 py-3 font-medium text-center">Pax</th>
+                  <th className="px-5 py-3 font-medium text-center">Pasajeros</th>
                   <th className="px-5 py-3 font-medium">Estado</th>
                   <th className="px-5 py-3 font-medium text-right">Monto</th>
+                  <th className="px-5 py-3 font-medium text-center">Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {ag.reservas.length === 0 && (
-                  <tr><td colSpan={5} className="px-5 py-10 text-center text-slate-400">
+                  <tr><td colSpan={6} className="px-5 py-10 text-center text-slate-400">
                     Esta agencia todavía no tiene reservas cargadas.
                   </td></tr>
                 )}
-                {[...ag.reservas].sort((a, b) => b.fecha.localeCompare(a.fecha)).map((r) => {
-                  const e = RESERVA_ESTADO[r.estado];
-                  const Icon = e.icon;
-                  return (
-                    <tr key={r.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
-                      <td className="px-5 py-3 text-slate-500 whitespace-nowrap">{r.fecha}</td>
-                      <td className="px-5 py-3 font-medium text-slate-800">{r.excursion}</td>
-                      <td className="px-5 py-3 text-center font-semibold text-slate-700">{r.pax}</td>
-                      <td className="px-5 py-3">
-                        <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full"
-                          style={{ color: e.color, background: e.bg }}>
-                          <Icon size={12} /> {r.estado}
-                        </span>
-                      </td>
-                      <td className="px-5 py-3 text-right font-semibold text-slate-700 whitespace-nowrap">{fmt(r.monto)}</td>
-                    </tr>
-                  );
-                })}
+                {[...ag.reservas].sort((a, b) => b.fecha.localeCompare(a.fecha)).map((r) => (
+                  <ReservaRow key={r.id} r={r} ag={ag} productos={productos}
+                    updateReserva={updateReserva} deleteReserva={deleteReserva} />
+                ))}
               </tbody>
             </table>
           </div>
@@ -1603,6 +1709,28 @@ export default function App() {
         : a
     ));
 
+  // Editar una reserva existente (cantidad de pasajeros, recalcula monto)
+  const updateReserva = (agId, reservaId, cambios) =>
+    setAgencias(agencias.map((a) =>
+      a.id === agId
+        ? { ...a, reservas: (a.reservas || []).map((r) => r.id === reservaId ? { ...r, ...cambios } : r) }
+        : a
+    ));
+
+  // Borrar una reserva
+  const deleteReserva = (agId, reservaId) =>
+    setAgencias(agencias.map((a) =>
+      a.id === agId
+        ? { ...a, reservas: (a.reservas || []).filter((r) => r.id !== reservaId) }
+        : a
+    ));
+
+  // Cambiar estado y/o etapa de captación de la agencia
+  const updateAgencia = (agId, cambios) =>
+    setAgencias(agencias.map((a) =>
+      a.id === agId ? { ...a, ...cambios } : a
+    ));
+
   // Importa agencias del Excel: agrega las que no existan (por nombre)
   const importarAgencias = (nuevas) => {
     setAgencias((prev) => {
@@ -1702,7 +1830,7 @@ export default function App() {
 
         <div className="p-8">
           {vista === "dashboard" && <Dashboard agencias={agencias} />}
-          {vista === "agencias" && <Agencias agencias={agencias} addAgencia={addAgencia} addVisita={addVisita} deleteAgencia={deleteAgencia} productos={productos} setPreciosAgencia={setPreciosAgencia} importarAgencias={importarAgencias} addReserva={addReserva} />}
+          {vista === "agencias" && <Agencias agencias={agencias} addAgencia={addAgencia} addVisita={addVisita} deleteAgencia={deleteAgencia} productos={productos} setPreciosAgencia={setPreciosAgencia} importarAgencias={importarAgencias} addReserva={addReserva} updateReserva={updateReserva} deleteReserva={deleteReserva} updateAgencia={updateAgencia} />}
           {vista === "productos" && <Productos productos={productos} setProductos={setProductos} />}
           {vista === "mapa" && <MapaZonas agencias={agencias} />}
           {vista === "pipeline" && <Pipeline pipeline={pipeline} moverTarjeta={moverTarjeta} />}
