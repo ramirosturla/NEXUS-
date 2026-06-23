@@ -28,6 +28,21 @@ import { cargarDatos, guardarAgencias, guardarProductos, signIn, signOut, getSes
 function Logo({ size = 36, light = false }) {
   const c = light ? "#ffffff" : BRAND.abismo;
   const acc = BRAND.turquesa;
+  const [imgOk, setImgOk] = useState(true);
+  // Logo real de Sturla: versión blanca para fondos oscuros, normal para claros
+  const url = light
+    ? "https://sturlaviajes.tur.ar/front/imagenes/logo-web-blanco.png"
+    : "https://sturlaviajes.tur.ar/front/imagenes/logo-web.png";
+
+  if (imgOk) {
+    return (
+      <div className="flex items-center gap-2.5">
+        <img src={url} alt="Sturla Viajes" onError={() => setImgOk(false)}
+          style={{ height: size * 1.1, width: "auto", maxWidth: size * 4.5, objectFit: "contain" }} />
+      </div>
+    );
+  }
+  // Fallback: ícono dibujado si la imagen no carga
   return (
     <div className="flex items-center gap-2.5">
       <div className="rounded-xl flex items-center justify-center shrink-0"
@@ -36,7 +51,7 @@ function Logo({ size = 36, light = false }) {
       </div>
       <div className="leading-none">
         <p className="font-bold tracking-tight" style={{ color: c, fontSize: size * 0.42 }}>
-          Sturla<span style={{ color: acc }}>CRM</span>
+          Sturla<span style={{ color: acc }}>Viajes</span>
         </p>
         <p className="font-medium tracking-wide" style={{ color: light ? "rgba(255,255,255,0.6)" : "#94a3b8", fontSize: size * 0.26 }}>
           Canal de Agencias
@@ -1604,11 +1619,11 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex font-sans text-slate-900">
-      {/* Sidebar */}
-      <aside className="w-60 flex flex-col fixed h-full" style={{ background: BRAND.abismo }}>
-        <div className="px-5 py-5 border-b border-white/10">
-          <Logo size={34} light />
+    <div className="min-h-screen flex font-sans text-slate-900" style={{ background: "#f7fafc" }}>
+      {/* Sidebar claro */}
+      <aside className="w-60 flex flex-col fixed h-full bg-white border-r border-slate-200">
+        <div className="px-5 py-5 border-b border-slate-100">
+          <Logo size={30} />
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1">
@@ -1618,27 +1633,28 @@ export default function App() {
               <button key={item.key} onClick={() => setVista(item.key)}
                 className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
                 style={active
-                  ? { background: BRAND.turquesa, color: "#fff" }
-                  : { color: "rgba(255,255,255,0.6)" }}
-                onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "rgba(255,255,255,0.06)"; }}
+                  ? { background: BRAND.espuma, color: BRAND.abismo }
+                  : { color: "#64748b" }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = "#f1f5f9"; }}
                 onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}>
-                <item.icon size={18} /> {item.label}
-                {active && <ChevronRight size={16} className="ml-auto" />}
+                <item.icon size={18} style={{ color: active ? BRAND.turquesa : "#94a3b8" }} />
+                {item.label}
+                {active && <span className="ml-auto w-1.5 h-1.5 rounded-full" style={{ background: BRAND.turquesa }} />}
               </button>
             );
           })}
         </nav>
 
-        <div className="px-3 py-4 border-t border-white/10">
+        <div className="px-3 py-4 border-t border-slate-100">
           <div className="flex items-center gap-3 px-2 py-2">
             <Avatar name={usuario.email || "Usuario"} size={36} />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-white truncate">{usuario.email || "Usuario"}</p>
-              <p className="text-xs text-white/50 truncate">Sesión activa</p>
+              <p className="text-sm font-medium text-slate-800 truncate">{usuario.email || "Usuario"}</p>
+              <p className="text-xs text-slate-400 truncate">Sesión activa</p>
             </div>
           </div>
           <button onClick={async () => { await signOut(); setUsuario(null); }}
-            className="w-full flex items-center gap-2 px-2 py-2 mt-1 rounded-lg text-sm font-medium text-white/60 hover:text-white hover:bg-white/6 transition-colors">
+            className="w-full flex items-center gap-2 px-2 py-2 mt-1 rounded-lg text-sm font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors">
             <LogOut size={16} /> Cerrar sesión
           </button>
         </div>
@@ -1646,12 +1662,16 @@ export default function App() {
 
       {/* Main */}
       <main className="flex-1 ml-60">
-        <header className="bg-white border-b border-slate-200 px-8 py-5 sticky top-0 z-10 flex items-start justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-slate-800 tracking-tight">{titulos[vista].t}</h1>
-            <p className="text-sm text-slate-500 mt-0.5">{titulos[vista].s}</p>
+        <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
+          {/* Línea de agua: firma visual náutica */}
+          <div style={{ height: 3, background: `linear-gradient(90deg, ${BRAND.abismo} 0%, ${BRAND.marea} 40%, ${BRAND.turquesa} 100%)` }} />
+          <div className="px-8 py-5 flex items-start justify-between">
+            <div>
+              <h1 className="text-xl font-bold text-slate-800 tracking-tight">{titulos[vista].t}</h1>
+              <p className="text-sm text-slate-500 mt-0.5">{titulos[vista].s}</p>
+            </div>
+            <SyncBadge habilitado={supabaseHabilitado} estado={syncEstado} />
           </div>
-          <SyncBadge habilitado={supabaseHabilitado} estado={syncEstado} />
         </header>
 
         <div className="p-8">
