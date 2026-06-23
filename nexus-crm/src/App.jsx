@@ -4,7 +4,8 @@ import {
   TrendingUp, DollarSign, Users2, Anchor, Search, ArrowLeft,
   ArrowRight, X, Plus, LogOut, Lock, ChevronRight, Calendar,
   MapPin, Mail, Phone, CheckCircle2, Clock, XCircle, Filter, Zap,
-  Map as MapIcon, NotebookPen, CalendarClock,
+  Map as MapIcon, NotebookPen, CalendarClock, Trash2, Tag,
+  CreditCard, Upload, Package, Pencil, AlertTriangle, FileSpreadsheet,
 } from "lucide-react";
 import {
   BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -13,8 +14,10 @@ import {
 import {
   BRAND, USUARIOS, EJECUTIVOS, EXCURSIONES, ESTADOS_AGENCIA, ETAPAS,
   AGENCIAS, PIPELINE_INICIAL, DATOS_MENSUALES, ZONAS, fmt, totalPax,
-  totalFacturado, geoDeCiudad, resumenPorZona,
+  totalFacturado, geoDeCiudad, resumenPorZona, PRODUCTOS_INICIALES,
+  CONDICIONES_PAGO, precioAgencia, parseRankingWorkbook,
 } from "./data";
+import * as XLSX from "xlsx";
 
 // ═════════════════════════════════════════════════════════════
 // Logo de Sturla recreado en SVG (timón + texto)
@@ -282,16 +285,40 @@ function Dashboard({ agencias }) {
 // ═════════════════════════════════════════════════════════════
 // VISTA: Agencias (lista + detalle)
 // ═════════════════════════════════════════════════════════════
-function Agencias({ agencias, addAgencia, addVisita }) {
+function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, setPreciosAgencia, importarAgencias }) {
   const [sel, setSel] = useState(null);
   const [search, setSearch] = useState("");
   const [filtro, setFiltro] = useState("Todas");
   const [showForm, setShowForm] = useState(false);
+  const [importInfo, setImportInfo] = useState(null);
+  const fileRef = React.useRef(null);
 
   if (sel) {
     const ag = agencias.find((a) => a.id === sel);
-    if (ag) return <AgenciaDetalle ag={ag} onBack={() => setSel(null)} addVisita={addVisita} />;
+    if (ag) return (
+      <AgenciaDetalle ag={ag} onBack={() => setSel(null)} addVisita={addVisita}
+        deleteAgencia={(id) => { deleteAgencia(id); setSel(null); }}
+        productos={productos} setPreciosAgencia={setPreciosAgencia} />
+    );
   }
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportInfo({ estado: "cargando" });
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const res = parseRankingWorkbook(wb, XLSX);
+      if (res.error) { setImportInfo({ estado: "error", msg: res.error }); return; }
+      const antes = agencias.length;
+      importarAgencias(res.agencias);
+      setImportInfo({ estado: "ok", anio: res.anio, total: res.total, hoja: res.hoja });
+    } catch (err) {
+      setImportInfo({ estado: "error", msg: "No pude leer el archivo. ¿Es el Excel del ranking anual?" });
+    }
+    e.target.value = "";
+  };
 
   const filtradas = agencias.filter((a) =>
     a.nombre.toLowerCase().includes(search.toLowerCase()) &&
@@ -306,12 +333,40 @@ function Agencias({ agencias, addAgencia, addVisita }) {
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar agencia..."
             className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
         </div>
-        <button onClick={() => setShowForm(true)}
-          className="inline-flex items-center gap-2 text-white text-sm font-medium px-4 py-2 rounded-lg transition-opacity hover:opacity-90"
-          style={{ background: BRAND.abismo }}>
-          <Plus size={16} /> Nueva agencia
-        </button>
+        <div className="flex items-center gap-2">
+          <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile} className="hidden" />
+          <button onClick={() => fileRef.current?.click()}
+            className="inline-flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors">
+            <Upload size={16} /> Importar ranking
+          </button>
+          <button onClick={() => setShowForm(true)}
+            className="inline-flex items-center gap-2 text-white text-sm font-medium px-4 py-2 rounded-lg transition-opacity hover:opacity-90"
+            style={{ background: BRAND.abismo }}>
+            <Plus size={16} /> Nueva agencia
+          </button>
+        </div>
       </div>
+
+      {/* Banner de importación */}
+      {importInfo && (
+        <div className={`rounded-lg px-4 py-3 text-sm flex items-start gap-2.5 ${
+          importInfo.estado === "ok" ? "bg-emerald-50 text-emerald-800"
+          : importInfo.estado === "error" ? "bg-rose-50 text-rose-700"
+          : "bg-slate-100 text-slate-600"
+        }`}>
+          {importInfo.estado === "ok" && <CheckCircle2 size={16} className="mt-0.5 shrink-0" />}
+          {importInfo.estado === "error" && <AlertTriangle size={16} className="mt-0.5 shrink-0" />}
+          {importInfo.estado === "cargando" && <Clock size={16} className="mt-0.5 shrink-0" />}
+          <div className="flex-1">
+            {importInfo.estado === "ok" && (
+              <span>Leí la hoja <strong>{importInfo.hoja}</strong>: {importInfo.total} agencias del ranking {importInfo.anio}. Se agregaron las que no existían (las repetidas se omitieron).</span>
+            )}
+            {importInfo.estado === "error" && <span>{importInfo.msg}</span>}
+            {importInfo.estado === "cargando" && <span>Leyendo el archivo…</span>}
+          </div>
+          <button onClick={() => setImportInfo(null)} className="text-current opacity-50 hover:opacity-100"><X size={15} /></button>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-2 items-center">
         <Filter size={15} className="text-slate-400" />
@@ -371,8 +426,10 @@ function Agencias({ agencias, addAgencia, addVisita }) {
 }
 
 // Detalle de una agencia con histórico
-function AgenciaDetalle({ ag, onBack, addVisita }) {
+function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPreciosAgencia }) {
   const [showVisita, setShowVisita] = useState(false);
+  const [showPrecios, setShowPrecios] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const pax = totalPax(ag);
   const fact = totalFacturado(ag);
   const confirmadas = ag.reservas.filter((r) => r.estado === "Confirmada").length;
@@ -802,6 +859,162 @@ function MapaZonas({ agencias }) {
 }
 
 
+// ═════════════════════════════════════════════════════════════
+// VISTA: Productos (catálogo de excursiones y tarifas)
+// ═════════════════════════════════════════════════════════════
+function Productos({ productos, setProductos }) {
+  const [editId, setEditId] = useState(null);
+  const [editVal, setEditVal] = useState("");
+  const [showForm, setShowForm] = useState(false);
+
+  const guardarPrecio = (id) => {
+    const n = parseFloat(editVal);
+    if (!isNaN(n) && n >= 0) {
+      setProductos(productos.map((p) => (p.id === id ? { ...p, precioBase: Math.round(n) } : p)));
+    }
+    setEditId(null);
+    setEditVal("");
+  };
+
+  const toggleActivo = (id) =>
+    setProductos(productos.map((p) => (p.id === id ? { ...p, activo: !p.activo } : p)));
+
+  const activos = productos.filter((p) => p.activo).length;
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+        <p className="text-sm text-slate-500">
+          {productos.length} productos en el catálogo · <span className="text-emerald-600 font-medium">{activos} activos</span>.
+          El precio base es la tarifa de referencia; cada agencia puede tener su precio propio.
+        </p>
+        <button onClick={() => setShowForm(true)}
+          className="inline-flex items-center gap-2 text-white text-sm font-medium px-4 py-2 rounded-lg transition-opacity hover:opacity-90 shrink-0"
+          style={{ background: BRAND.abismo }}>
+          <Plus size={16} /> Nuevo producto
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {productos.map((p) => (
+          <div key={p.id}
+            className="bg-white rounded-xl border border-slate-200 p-5 transition-all"
+            style={{ opacity: p.activo ? 1 : 0.6 }}>
+            <div className="flex items-start justify-between mb-3">
+              <div className="w-11 h-11 rounded-lg flex items-center justify-center"
+                style={{ background: (p.color || BRAND.marea) + "18" }}>
+                <Ship size={22} style={{ color: p.color || BRAND.marea }} />
+              </div>
+              <button onClick={() => toggleActivo(p.id)}
+                className={`text-xs font-medium px-2.5 py-1 rounded-full transition-colors ${
+                  p.activo ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                }`}>
+                {p.activo ? "Activo" : "Inactivo"}
+              </button>
+            </div>
+            <h3 className="font-semibold text-slate-800 leading-tight">{p.nombre}</h3>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-slate-400">
+              {p.salida && <span className="flex items-center gap-1"><MapPin size={11} /> {p.salida}</span>}
+              {p.duracion && <span className="flex items-center gap-1"><Clock size={11} /> {p.duracion}</span>}
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <p className="text-xs text-slate-400 mb-1">Precio base (adulto)</p>
+              {editId === p.id ? (
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                    <input value={editVal} onChange={(e) => setEditVal(e.target.value)} autoFocus type="number"
+                      onKeyDown={(e) => { if (e.key === "Enter") guardarPrecio(p.id); if (e.key === "Escape") setEditId(null); }}
+                      className="w-full pl-6 pr-2 py-1.5 text-sm rounded-lg border border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-500/30" />
+                  </div>
+                  <button onClick={() => guardarPrecio(p.id)}
+                    className="text-xs font-medium text-white px-3 py-1.5 rounded-lg" style={{ background: BRAND.verdeOk }}>
+                    OK
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <p className="text-xl font-bold text-slate-800">{fmt(p.precioBase)}</p>
+                  <button onClick={() => { setEditId(p.id); setEditVal(String(p.precioBase)); }}
+                    className="inline-flex items-center gap-1 text-xs font-medium text-cyan-700 hover:text-cyan-800">
+                    <Pencil size={13} /> Editar
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {showForm && <ProductoForm onClose={() => setShowForm(false)}
+        onSave={(prod) => { setProductos([...productos, prod]); setShowForm(false); }} />}
+    </div>
+  );
+}
+
+// Formulario de nuevo producto
+function ProductoForm({ onClose, onSave }) {
+  const [form, setForm] = useState({ nombre: "", salida: "", duracion: "", precioBase: "" });
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+
+  const submit = () => {
+    if (!form.nombre.trim() || form.precioBase === "") return;
+    const COLORES = ["#0f3d63", "#16a3b8", "#0e7490", "#0891b2", "#155e75", "#0284c7", "#0d9488"];
+    onSave({
+      id: "prod-" + Date.now(),
+      nombre: form.nombre.trim(),
+      salida: form.salida.trim() || "Tigre",
+      duracion: form.duracion.trim() || "—",
+      precioBase: Math.round(parseFloat(form.precioBase)) || 0,
+      color: COLORES[Math.floor(Math.random() * COLORES.length)],
+      activo: true,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <h3 className="font-semibold text-slate-800">Nuevo producto</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <Field label="Nombre de la excursión">
+            <input value={form.nombre} onChange={set("nombre")} autoFocus placeholder="Ej: Paseo nocturno por el Delta"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
+          </Field>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Punto de salida">
+              <input value={form.salida} onChange={set("salida")} placeholder="Ej: Tigre"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
+            </Field>
+            <Field label="Duración">
+              <input value={form.duracion} onChange={set("duracion")} placeholder="Ej: 1:30 hs"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
+            </Field>
+          </div>
+          <Field label="Precio base (adulto)">
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+              <input value={form.precioBase} onChange={set("precioBase")} type="number" placeholder="0"
+                className="w-full pl-7 pr-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
+            </div>
+          </Field>
+        </div>
+        <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
+          <button onClick={onClose} className="flex-1 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg py-2 hover:bg-slate-50">
+            Cancelar
+          </button>
+          <button onClick={submit} className="flex-1 text-sm font-medium text-white rounded-lg py-2 hover:opacity-90" style={{ background: BRAND.abismo }}>
+            Crear producto
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Pipeline({ pipeline, moverTarjeta }) {
   const [dragId, setDragId] = useState(null);
   const totalPorEtapa = (key) =>
@@ -956,6 +1169,7 @@ function Distribucion({ agencias }) {
 const NAV = [
   { key: "dashboard", label: "Dashboard", icon: LayoutDashboard },
   { key: "agencias", label: "Agencias", icon: Building2 },
+  { key: "productos", label: "Productos", icon: Package },
   { key: "mapa", label: "Mapa de zonas", icon: MapIcon },
   { key: "pipeline", label: "Captación", icon: KanbanSquare },
   { key: "distribucion", label: "Equipo", icon: Users },
@@ -966,13 +1180,17 @@ export default function App() {
   const [vista, setVista] = useState("dashboard");
   const [agencias, setAgencias] = useState(AGENCIAS);
   const [pipeline, setPipeline] = useState(PIPELINE_INICIAL);
+  const [productos, setProductos] = useState(PRODUCTOS_INICIALES);
 
   if (!usuario) return <Login onLogin={setUsuario} />;
 
   const addAgencia = (a) => {
     const geo = geoDeCiudad(a.ciudad, Date.now());
-    setAgencias([{ ...a, id: Date.now(), reservas: [], visitas: [], ...geo }, ...agencias]);
+    setAgencias([{ ...a, id: Date.now(), reservas: [], visitas: [], precios: {}, ...geo }, ...agencias]);
   };
+
+  const deleteAgencia = (agId) =>
+    setAgencias(agencias.filter((a) => a.id !== agId));
 
   const addVisita = (agId, visita) =>
     setAgencias(agencias.map((a) =>
@@ -981,12 +1199,47 @@ export default function App() {
         : a
     ));
 
+  const setPreciosAgencia = (agId, precios, condicionPago) =>
+    setAgencias(agencias.map((a) =>
+      a.id === agId ? { ...a, precios, condicionPago } : a
+    ));
+
+  // Importa agencias del Excel: agrega las que no existan (por nombre)
+  const importarAgencias = (nuevas) => {
+    setAgencias((prev) => {
+      const existentes = new Set(prev.map((a) => a.nombre.toLowerCase()));
+      const aAgregar = nuevas
+        .filter((n) => !existentes.has(n.nombre.toLowerCase()))
+        .map((n, i) => {
+          const geo = geoDeCiudad("CABA", Date.now() + i);
+          return {
+            id: Date.now() + i,
+            nombre: n.nombre,
+            contacto: "—", email: "—", telefono: "—",
+            ciudad: "CABA", direccion: "Importada del ranking anual",
+            ...geo,
+            estado: "Activa",
+            ejecutivo: EJECUTIVOS[i % EJECUTIVOS.length],
+            desde: new Date().toISOString().slice(0, 10),
+            condicionPago: "Contado",
+            precios: {},
+            reservas: [],
+            visitas: [],
+            paxAnual: n.total,
+            mesesImport: n.meses,
+          };
+        });
+      return [...aAgregar, ...prev];
+    });
+  };
+
   const moverTarjeta = (id, etapa) =>
     setPipeline(pipeline.map((p) => (p.id === id ? { ...p, etapa } : p)));
 
   const titulos = {
     dashboard: { t: "Dashboard del canal", s: "Visión general de agencias y pasajeros" },
-    agencias: { t: "Gestión de agencias", s: "Detalle, histórico y reservas por agencia" },
+    agencias: { t: "Gestión de agencias", s: "Detalle, histórico, precios y reservas" },
+    productos: { t: "Productos y tarifas", s: "Catálogo de excursiones del canal" },
     mapa: { t: "Mapa de zonas", s: "Valor económico y pasajeros por región" },
     pipeline: { t: "Captación de agencias", s: "Pipeline de alta de nuevos operadores" },
     distribucion: { t: "Equipo de cuentas", s: "Asignación y carga por ejecutivo" },
@@ -1042,7 +1295,8 @@ export default function App() {
 
         <div className="p-8">
           {vista === "dashboard" && <Dashboard agencias={agencias} />}
-          {vista === "agencias" && <Agencias agencias={agencias} addAgencia={addAgencia} addVisita={addVisita} />}
+          {vista === "agencias" && <Agencias agencias={agencias} addAgencia={addAgencia} addVisita={addVisita} deleteAgencia={deleteAgencia} productos={productos} setPreciosAgencia={setPreciosAgencia} importarAgencias={importarAgencias} />}
+          {vista === "productos" && <Productos productos={productos} setProductos={setProductos} />}
           {vista === "mapa" && <MapaZonas agencias={agencias} />}
           {vista === "pipeline" && <Pipeline pipeline={pipeline} moverTarjeta={moverTarjeta} />}
           {vista === "distribucion" && <Distribucion agencias={agencias} />}
