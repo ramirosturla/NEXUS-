@@ -285,7 +285,7 @@ function Dashboard({ agencias }) {
 // ═════════════════════════════════════════════════════════════
 // VISTA: Agencias (lista + detalle)
 // ═════════════════════════════════════════════════════════════
-function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, setPreciosAgencia, importarAgencias }) {
+function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, setPreciosAgencia, importarAgencias, addReserva }) {
   const [sel, setSel] = useState(null);
   const [search, setSearch] = useState("");
   const [filtro, setFiltro] = useState("Todas");
@@ -298,7 +298,7 @@ function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, s
     if (ag) return (
       <AgenciaDetalle ag={ag} onBack={() => setSel(null)} addVisita={addVisita}
         deleteAgencia={(id) => { deleteAgencia(id); setSel(null); }}
-        productos={productos} setPreciosAgencia={setPreciosAgencia} />
+        productos={productos} setPreciosAgencia={setPreciosAgencia} addReserva={addReserva} />
     );
   }
 
@@ -426,10 +426,11 @@ function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, s
 }
 
 // Detalle de una agencia con histórico
-function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPreciosAgencia }) {
+function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPreciosAgencia, addReserva }) {
   const [showVisita, setShowVisita] = useState(false);
   const [showPrecios, setShowPrecios] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
+  const [showReserva, setShowReserva] = useState(false);
   const pax = totalPax(ag);
   const fact = totalFacturado(ag);
   const confirmadas = ag.reservas.filter((r) => r.estado === "Confirmada").length;
@@ -465,11 +466,28 @@ function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPr
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2 text-sm bg-slate-50 rounded-lg px-3 py-2 shrink-0">
-            <Avatar name={ag.ejecutivo} size={28} />
-            <div className="leading-tight">
-              <p className="text-xs text-slate-400">Ejecutivo a cargo</p>
-              <p className="font-medium text-slate-700">{ag.ejecutivo}</p>
+          <div className="flex flex-col items-end gap-3 shrink-0">
+            <div className="flex items-center gap-2 text-sm bg-slate-50 rounded-lg px-3 py-2">
+              <Avatar name={ag.ejecutivo} size={28} />
+              <div className="leading-tight">
+                <p className="text-xs text-slate-400">Ejecutivo a cargo</p>
+                <p className="font-medium text-slate-700">{ag.ejecutivo}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <button onClick={() => setShowReserva(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-white px-3 py-2 rounded-lg transition-opacity hover:opacity-90"
+                style={{ background: BRAND.abismo }}>
+                <Plus size={14} /> Cargar reserva
+              </button>
+              <button onClick={() => setShowPrecios(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 border border-slate-200 px-3 py-2 rounded-lg hover:bg-slate-50 transition-colors">
+                <CreditCard size={14} /> Precios y pago
+              </button>
+              <button onClick={() => setShowDelete(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-rose-600 border border-rose-200 px-3 py-2 rounded-lg hover:bg-rose-50 transition-colors">
+                <AlertTriangle size={14} /> Eliminar
+              </button>
             </div>
           </div>
         </div>
@@ -574,6 +592,217 @@ function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPr
           onClose={() => setShowVisita(false)}
           onSave={(visita) => { addVisita(ag.id, visita); setShowVisita(false); }} />
       )}
+
+      {showReserva && (
+        <ReservaForm ag={ag} productos={productos}
+          onClose={() => setShowReserva(false)}
+          onSave={(reserva) => { addReserva(ag.id, reserva); setShowReserva(false); }} />
+      )}
+
+      {showPrecios && (
+        <PreciosForm ag={ag} productos={productos}
+          onClose={() => setShowPrecios(false)}
+          onSave={(precios, condicionPago) => { setPreciosAgencia(ag.id, precios, condicionPago); setShowPrecios(false); }} />
+      )}
+
+      {showDelete && (
+        <ConfirmDelete nombre={ag.nombre}
+          onClose={() => setShowDelete(false)}
+          onConfirm={() => deleteAgencia(ag.id)} />
+      )}
+    </div>
+  );
+}
+
+// Formulario de carga MANUAL de reservas de pasajeros (por mes)
+const MESES_NOMBRE = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+function ReservaForm({ ag, productos, onClose, onSave }) {
+  const activos = (productos || []).filter((p) => p.activo);
+  const hoy = new Date();
+  const [prodId, setProdId] = useState(activos[0]?.id || "");
+  const [pax, setPax] = useState("");
+  const [mes, setMes] = useState(hoy.getMonth());
+  const [anio, setAnio] = useState(hoy.getFullYear());
+  const [estado, setEstado] = useState("Confirmada");
+
+  const prod = activos.find((p) => p.id === prodId);
+  const precioUnit = prod ? precioAgencia(ag, prod.id, productos) : 0;
+  const paxNum = parseInt(pax) || 0;
+  const montoTotal = precioUnit * paxNum;
+
+  const submit = () => {
+    if (!prod || paxNum <= 0) return;
+    const fecha = `${anio}-${String(mes + 1).padStart(2, "0")}-15`;
+    onSave({
+      fecha,
+      excursion: prod.nombre,
+      excId: prod.id,
+      pax: paxNum,
+      ejecutivo: ag.ejecutivo,
+      estado,
+      monto: montoTotal,
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <h3 className="font-semibold text-slate-800">Cargar reserva de pasajeros</h3>
+            <p className="text-xs text-slate-400 mt-0.5">{ag.nombre}</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <Field label="Servicio / excursión">
+            <select value={prodId} onChange={(e) => setProdId(e.target.value)}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+              {activos.length === 0 && <option>No hay productos activos</option>}
+              {activos.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
+            </select>
+          </Field>
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Mes">
+              <select value={mes} onChange={(e) => setMes(parseInt(e.target.value))}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+                {MESES_NOMBRE.map((m, i) => <option key={i} value={i}>{m}</option>)}
+              </select>
+            </Field>
+            <Field label="Año">
+              <select value={anio} onChange={(e) => setAnio(parseInt(e.target.value))}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+                {[2023, 2024, 2025, 2026].map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </Field>
+            <Field label="Pasajeros">
+              <input value={pax} onChange={(e) => setPax(e.target.value)} type="number" min="1" autoFocus placeholder="0"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
+            </Field>
+          </div>
+          <Field label="Estado">
+            <div className="flex gap-2">
+              {["Confirmada", "Pendiente", "Cancelada"].map((s) => (
+                <button key={s} onClick={() => setEstado(s)}
+                  className="flex-1 text-xs font-medium py-2 rounded-lg border transition-colors"
+                  style={estado === s
+                    ? { background: RESERVA_ESTADO[s].bg, color: RESERVA_ESTADO[s].color, borderColor: RESERVA_ESTADO[s].color }
+                    : { background: "#fff", color: "#64748b", borderColor: "#e2e8f0" }}>
+                  {s}
+                </button>
+              ))}
+            </div>
+          </Field>
+          {/* Resumen calculado */}
+          <div className="bg-slate-50 rounded-lg px-4 py-3 flex items-center justify-between">
+            <div className="text-sm text-slate-500">
+              {paxNum > 0 ? `${paxNum} pax × ${fmt(precioUnit)}` : "Precio para esta agencia"}
+            </div>
+            <div className="text-lg font-bold text-slate-800">{fmt(montoTotal)}</div>
+          </div>
+        </div>
+        <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
+          <button onClick={onClose} className="flex-1 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg py-2 hover:bg-slate-50">
+            Cancelar
+          </button>
+          <button onClick={submit} className="flex-1 text-sm font-medium text-white rounded-lg py-2 hover:opacity-90" style={{ background: BRAND.abismo }}>
+            Guardar reserva
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Formulario de precios por agencia + condición de pago
+function PreciosForm({ ag, productos, onClose, onSave }) {
+  const activos = (productos || []).filter((p) => p.activo);
+  const [precios, setPrecios] = useState(() => {
+    const init = {};
+    activos.forEach((p) => { init[p.id] = (ag.precios && ag.precios[p.id] != null) ? ag.precios[p.id] : p.precioBase; });
+    return init;
+  });
+  const [condicion, setCondicion] = useState(ag.condicionPago || CONDICIONES_PAGO[0]);
+
+  const setPrecio = (id, val) => setPrecios({ ...precios, [id]: val === "" ? "" : Math.round(parseFloat(val)) || 0 });
+
+  const submit = () => {
+    // Guardar solo los que difieren del base (los demás quedan en base automáticamente)
+    const limpio = {};
+    activos.forEach((p) => { if (precios[p.id] !== "" && precios[p.id] != null) limpio[p.id] = precios[p.id]; });
+    onSave(limpio, condicion);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[90vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <div>
+            <h3 className="font-semibold text-slate-800">Precios y facilidades de pago</h3>
+            <p className="text-xs text-slate-400 mt-0.5">{ag.nombre}</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+        </div>
+        <div className="p-6 space-y-4 overflow-y-auto">
+          <Field label="Condición de pago">
+            <select value={condicion} onChange={(e) => setCondicion(e.target.value)}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+              {CONDICIONES_PAGO.map((c) => <option key={c}>{c}</option>)}
+            </select>
+          </Field>
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-2">Precio por excursión (para esta agencia)</p>
+            <div className="space-y-2">
+              {activos.map((p) => (
+                <div key={p.id} className="flex items-center gap-3">
+                  <span className="flex-1 text-sm text-slate-700 truncate">{p.nombre}</span>
+                  <span className="text-xs text-slate-400 whitespace-nowrap">base {fmt(p.precioBase)}</span>
+                  <div className="relative w-32">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">$</span>
+                    <input value={precios[p.id]} onChange={(e) => setPrecio(p.id, e.target.value)} type="number"
+                      className="w-full pl-6 pr-2 py-1.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
+          <button onClick={onClose} className="flex-1 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg py-2 hover:bg-slate-50">
+            Cancelar
+          </button>
+          <button onClick={submit} className="flex-1 text-sm font-medium text-white rounded-lg py-2 hover:opacity-90" style={{ background: BRAND.abismo }}>
+            Guardar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Modal de confirmación de borrado
+function ConfirmDelete({ nombre, onClose, onConfirm }) {
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="p-6">
+          <div className="w-12 h-12 rounded-full bg-rose-50 flex items-center justify-center mb-4">
+            <AlertTriangle size={24} className="text-rose-600" />
+          </div>
+          <h3 className="font-semibold text-slate-800 text-lg">¿Eliminar esta agencia?</h3>
+          <p className="text-sm text-slate-500 mt-2">
+            Estás por eliminar <span className="font-medium text-slate-700">{nombre}</span> junto con todas sus reservas y visitas. Esta acción no se puede deshacer.
+          </p>
+        </div>
+        <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
+          <button onClick={onClose} className="flex-1 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg py-2 hover:bg-slate-50">
+            Cancelar
+          </button>
+          <button onClick={onConfirm} className="flex-1 text-sm font-medium text-white rounded-lg py-2 hover:opacity-90 bg-rose-600">
+            Sí, eliminar
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1204,6 +1433,13 @@ export default function App() {
       a.id === agId ? { ...a, precios, condicionPago } : a
     ));
 
+  const addReserva = (agId, reserva) =>
+    setAgencias(agencias.map((a) =>
+      a.id === agId
+        ? { ...a, reservas: [{ ...reserva, id: `res-${Date.now()}` }, ...(a.reservas || [])] }
+        : a
+    ));
+
   // Importa agencias del Excel: agrega las que no existan (por nombre)
   const importarAgencias = (nuevas) => {
     setAgencias((prev) => {
@@ -1295,7 +1531,7 @@ export default function App() {
 
         <div className="p-8">
           {vista === "dashboard" && <Dashboard agencias={agencias} />}
-          {vista === "agencias" && <Agencias agencias={agencias} addAgencia={addAgencia} addVisita={addVisita} deleteAgencia={deleteAgencia} productos={productos} setPreciosAgencia={setPreciosAgencia} importarAgencias={importarAgencias} />}
+          {vista === "agencias" && <Agencias agencias={agencias} addAgencia={addAgencia} addVisita={addVisita} deleteAgencia={deleteAgencia} productos={productos} setPreciosAgencia={setPreciosAgencia} importarAgencias={importarAgencias} addReserva={addReserva} />}
           {vista === "productos" && <Productos productos={productos} setProductos={setProductos} />}
           {vista === "mapa" && <MapaZonas agencias={agencias} />}
           {vista === "pipeline" && <Pipeline pipeline={pipeline} moverTarjeta={moverTarjeta} />}
