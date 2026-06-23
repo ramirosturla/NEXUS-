@@ -121,65 +121,84 @@ function Login({ onLogin }) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden"
-      style={{ background: `linear-gradient(135deg, ${BRAND.abismo} 0%, ${BRAND.marea} 60%, ${BRAND.turquesa} 140%)` }}>
-      {/* Olas decorativas */}
-      <svg className="absolute bottom-0 left-0 w-full opacity-20" viewBox="0 0 1440 320" preserveAspectRatio="none" style={{ height: 200 }}>
-        <path fill="#ffffff" d="M0,160 C320,260 420,60 720,140 C1020,220 1200,80 1440,150 L1440,320 L0,320 Z" />
-      </svg>
-      <svg className="absolute bottom-0 left-0 w-full opacity-10" viewBox="0 0 1440 320" preserveAspectRatio="none" style={{ height: 260 }}>
-        <path fill="#ffffff" d="M0,220 C360,120 540,280 900,200 C1180,140 1320,240 1440,200 L1440,320 L0,320 Z" />
-      </svg>
-
-      <div className="relative w-full max-w-sm">
-        <div className="flex justify-center mb-6">
-          <Logo size={52} light />
-        </div>
-
-        <div className="bg-white rounded-2xl shadow-2xl p-8">
-          <h1 className="text-xl font-bold text-slate-800 tracking-tight">Acceso al equipo</h1>
-          <p className="text-sm text-slate-500 mt-1 mb-6">
-            Ingresá con tu email y contraseña para gestionar el canal de agencias.
-          </p>
-
-          <div className="space-y-4">
-            <label className="block">
-              <span className="text-xs font-semibold text-slate-500 mb-1.5 block">Email</span>
-              <div className="relative">
-                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input value={email} onChange={(e) => setEmail(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && submit()}
-                  placeholder="tu@email.com" autoFocus type="email"
-                  className="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:border-transparent"
-                  style={{ "--tw-ring-color": BRAND.turquesa }} />
-              </div>
-            </label>
-            <label className="block">
-              <span className="text-xs font-semibold text-slate-500 mb-1.5 block">Contraseña</span>
-              <div className="relative">
-                <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input value={pass} onChange={(e) => setPass(e.target.value)} type="password"
-                  onKeyDown={(e) => e.key === "Enter" && submit()}
-                  placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
-                  className="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:border-transparent"
-                  style={{ "--tw-ring-color": BRAND.turquesa }} />
-              </div>
-            </label>
-
-            {error && (
-              <div className="text-sm text-rose-600 bg-rose-50 rounded-lg px-3 py-2">{error}</div>
-            )}
-
-            <button onClick={submit} disabled={cargando}
-              className="w-full text-sm font-semibold text-white rounded-lg py-2.5 transition-opacity hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
-              style={{ background: BRAND.abismo }}>
-              {cargando ? (<><Loader2 size={16} className="animate-spin" /> Ingresando...</>) : "Ingresar"}
-            </button>
+    <div className="min-h-screen flex font-sans">
+      {/* Panel izquierdo: imagen del Delta con overlay nautico */}
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden"
+        style={{ background: `linear-gradient(135deg, ${BRAND.abismo} 0%, ${BRAND.marea} 55%, ${BRAND.turquesa} 130%)` }}>
+        <img
+          src="https://images.unsplash.com/photo-1559827260-dc66d52bef19?auto=format&fit=crop&w=1200&q=80"
+          alt="" aria-hidden="true"
+          className="absolute inset-0 w-full h-full object-cover opacity-35"
+          onError={(e) => { e.currentTarget.style.display = "none"; }} />
+        <svg className="absolute bottom-0 left-0 w-full opacity-25" viewBox="0 0 1440 320" preserveAspectRatio="none" style={{ height: 220 }}>
+          <path fill="#ffffff" d="M0,160 C320,260 420,60 720,140 C1020,220 1200,80 1440,150 L1440,320 L0,320 Z" />
+        </svg>
+        <div className="relative z-10 flex flex-col justify-between p-12 text-white">
+          <Logo size={46} light />
+          <div>
+            <h2 className="text-3xl font-bold leading-tight tracking-tight">
+              Gestioná tu canal<br />de agencias
+            </h2>
+            <p className="text-white/70 mt-3 max-w-sm">
+              Reservas, pasajeros y excursiones del Delta del Paraná, todo en un solo lugar.
+            </p>
           </div>
+          <p className="text-xs text-white/50">Sturla Viajes · Tigre · Delta del Paraná</p>
         </div>
-        <p className="text-center text-xs text-white/50 mt-5">
-          Sturla Viajes · Canal de Agencias · Delta del Paraná
-        </p>
+      </div>
+
+      {/* Panel derecho: formulario sobre fondo claro */}
+      <div className="flex-1 flex items-center justify-center p-6" style={{ background: "#f7fafc" }}>
+        <div className="w-full max-w-sm">
+          <div className="flex justify-center mb-8 lg:hidden">
+            <Logo size={40} />
+          </div>
+
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-100 p-8">
+            <h1 className="text-xl font-bold text-slate-800 tracking-tight">Acceso al equipo</h1>
+            <p className="text-sm text-slate-500 mt-1 mb-6">
+              Ingresá con tu email y contraseña para gestionar el canal de agencias.
+            </p>
+
+            <div className="space-y-4">
+              <label className="block">
+                <span className="text-xs font-semibold text-slate-500 mb-1.5 block">Email</span>
+                <div className="relative">
+                  <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input value={email} onChange={(e) => setEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && submit()}
+                    placeholder="tu@email.com" autoFocus type="email"
+                    className="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:border-transparent"
+                    style={{ "--tw-ring-color": BRAND.turquesa }} />
+                </div>
+              </label>
+              <label className="block">
+                <span className="text-xs font-semibold text-slate-500 mb-1.5 block">Contraseña</span>
+                <div className="relative">
+                  <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input value={pass} onChange={(e) => setPass(e.target.value)} type="password"
+                    onKeyDown={(e) => e.key === "Enter" && submit()}
+                    placeholder="********"
+                    className="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:border-transparent"
+                    style={{ "--tw-ring-color": BRAND.turquesa }} />
+                </div>
+              </label>
+
+              {error && (
+                <div className="text-sm text-rose-600 bg-rose-50 rounded-lg px-3 py-2">{error}</div>
+              )}
+
+              <button onClick={submit} disabled={cargando}
+                className="w-full text-sm font-semibold text-white rounded-lg py-2.5 transition-opacity hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
+                style={{ background: BRAND.abismo }}>
+                {cargando ? (<><Loader2 size={16} className="animate-spin" /> Ingresando...</>) : "Ingresar"}
+              </button>
+            </div>
+          </div>
+          <p className="text-center text-xs text-slate-400 mt-5">
+            Sturla Viajes \u00b7 Canal de Agencias
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -401,35 +420,42 @@ function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, s
 
       {/* Grid de tarjetas de agencia */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {filtradas.map((a) => (
+        {filtradas.map((a) => {
+          const ec = ESTADOS_AGENCIA[a.estado] || ESTADOS_AGENCIA.Prospecto;
+          return (
           <button key={a.id} onClick={() => setSel(a.id)}
-            className="text-left bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md hover:border-cyan-300 transition-all group">
-            <div className="flex items-start justify-between mb-3">
-              <div className="w-11 h-11 rounded-lg flex items-center justify-center" style={{ background: BRAND.espuma }}>
-                <Building2 size={22} style={{ color: BRAND.marea }} />
+            className="text-left bg-white rounded-xl border border-slate-200 overflow-hidden hover:shadow-lg hover:border-cyan-300 transition-all group">
+            {/* Barra de estado superior */}
+            <div style={{ height: 4, background: ec.color }} />
+            <div className="p-5">
+              <div className="flex items-start justify-between mb-3">
+                <div className="w-11 h-11 rounded-lg flex items-center justify-center" style={{ background: ec.color + "15" }}>
+                  <Building2 size={22} style={{ color: ec.color }} />
+                </div>
+                <EstadoBadge estado={a.estado} />
               </div>
-              <EstadoBadge estado={a.estado} />
-            </div>
-            <h3 className="font-semibold text-slate-800 group-hover:text-cyan-700 transition-colors">{a.nombre}</h3>
-            <p className="text-xs text-slate-400 flex items-center gap-1 mt-1">
-              <MapPin size={12} /> {a.ciudad}
-            </p>
-            <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-100">
-              <div>
-                <p className="text-lg font-bold text-slate-800">{totalPax(a)}</p>
-                <p className="text-xs text-slate-400">pasajeros</p>
+              <h3 className="font-semibold text-slate-800 group-hover:text-cyan-700 transition-colors">{a.nombre}</h3>
+              <p className="text-xs text-slate-400 flex items-center gap-1 mt-1">
+                <MapPin size={12} /> {a.ciudad}
+              </p>
+              <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-100">
+                <div>
+                  <p className="text-lg font-bold text-slate-800">{totalPax(a)}</p>
+                  <p className="text-xs text-slate-400">pasajeros</p>
+                </div>
+                <div>
+                  <p className="text-lg font-bold text-slate-800">{a.reservas.length}</p>
+                  <p className="text-xs text-slate-400">reservas</p>
+                </div>
               </div>
-              <div>
-                <p className="text-lg font-bold text-slate-800">{a.reservas.length}</p>
-                <p className="text-xs text-slate-400">reservas</p>
+              <div className="flex items-center gap-2 mt-4 text-xs text-slate-500">
+                <Avatar name={a.ejecutivo} size={20} /> {a.ejecutivo}
+                <ChevronRight size={14} className="ml-auto text-slate-300 group-hover:text-cyan-500 transition-colors" />
               </div>
-            </div>
-            <div className="flex items-center gap-2 mt-4 text-xs text-slate-500">
-              <Avatar name={a.ejecutivo} size={20} /> {a.ejecutivo}
-              <ChevronRight size={14} className="ml-auto text-slate-300 group-hover:text-cyan-500 transition-colors" />
             </div>
           </button>
-        ))}
+          );
+        })}
         {filtradas.length === 0 && (
           <div className="col-span-full text-center text-slate-400 py-12 bg-white rounded-xl border border-dashed border-slate-200">
             No hay agencias que coincidan. Probá con otro filtro o agregá una nueva.
