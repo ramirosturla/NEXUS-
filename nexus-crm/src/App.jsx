@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import {
   LayoutDashboard, Building2, KanbanSquare, Users, Ship,
   TrendingUp, DollarSign, Users2, Anchor, Search, ArrowLeft,
@@ -6,6 +6,7 @@ import {
   MapPin, Mail, Phone, CheckCircle2, Clock, XCircle, Filter, Zap,
   Map as MapIcon, NotebookPen, CalendarClock, Trash2, Tag,
   CreditCard, Upload, Package, Pencil, AlertTriangle, FileSpreadsheet,
+  Cloud, CloudOff, Loader2,
 } from "lucide-react";
 import {
   BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -18,6 +19,8 @@ import {
   CONDICIONES_PAGO, precioAgencia, parseRankingWorkbook,
 } from "./data";
 import * as XLSX from "xlsx";
+import { supabaseHabilitado } from "./supabaseClient";
+import { cargarDatos, guardarAgencias, guardarProductos, signIn, signOut, getSession, onAuthChange } from "./storage";
 
 // ═════════════════════════════════════════════════════════════
 // Logo de Sturla recreado en SVG (timón + texto)
@@ -78,16 +81,28 @@ const RESERVA_ESTADO = {
 // PANTALLA DE LOGIN
 // ═════════════════════════════════════════════════════════════
 function Login({ onLogin }) {
-  const [user, setUser] = useState("");
+  const [email, setEmail] = useState("");
   const [pass, setPass] = useState("");
   const [error, setError] = useState("");
+  const [cargando, setCargando] = useState(false);
 
-  const submit = () => {
-    const found = USUARIOS.find(
-      (u) => u.user === user.trim().toLowerCase() && u.pass === pass
-    );
-    if (found) { setError(""); onLogin(found); }
-    else setError("Usuario o contraseña incorrectos.");
+  const submit = async () => {
+    if (!email.trim() || !pass) {
+      setError("Completá tu email y contraseña.");
+      return;
+    }
+    setError("");
+    setCargando(true);
+    try {
+      const user = await signIn(email, pass);
+      onLogin(user);
+    } catch (e) {
+      const msg = (e?.message || "").toLowerCase();
+      if (msg.includes("invalid")) setError("Email o contraseña incorrectos.");
+      else if (msg.includes("email not confirmed")) setError("Tu email todavía no fue confirmado.");
+      else setError("No se pudo iniciar sesión. Revisá tu conexión e intentá de nuevo.");
+      setCargando(false);
+    }
   };
 
   return (
@@ -109,17 +124,17 @@ function Login({ onLogin }) {
         <div className="bg-white rounded-2xl shadow-2xl p-8">
           <h1 className="text-xl font-bold text-slate-800 tracking-tight">Acceso al equipo</h1>
           <p className="text-sm text-slate-500 mt-1 mb-6">
-            Ingresá con tu usuario para gestionar el canal de agencias.
+            Ingresá con tu email y contraseña para gestionar el canal de agencias.
           </p>
 
           <div className="space-y-4">
             <label className="block">
-              <span className="text-xs font-semibold text-slate-500 mb-1.5 block">Usuario</span>
+              <span className="text-xs font-semibold text-slate-500 mb-1.5 block">Email</span>
               <div className="relative">
-                <Users size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input value={user} onChange={(e) => setUser(e.target.value)}
+                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input value={email} onChange={(e) => setEmail(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && submit()}
-                  placeholder="ej: lucia" autoFocus
+                  placeholder="tu@email.com" autoFocus type="email"
                   className="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:border-transparent"
                   style={{ "--tw-ring-color": BRAND.turquesa }} />
               </div>
@@ -130,7 +145,7 @@ function Login({ onLogin }) {
                 <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                 <input value={pass} onChange={(e) => setPass(e.target.value)} type="password"
                   onKeyDown={(e) => e.key === "Enter" && submit()}
-                  placeholder="••••••••"
+                  placeholder="\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022"
                   className="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:border-transparent"
                   style={{ "--tw-ring-color": BRAND.turquesa }} />
               </div>
@@ -140,28 +155,15 @@ function Login({ onLogin }) {
               <div className="text-sm text-rose-600 bg-rose-50 rounded-lg px-3 py-2">{error}</div>
             )}
 
-            <button onClick={submit}
-              className="w-full text-sm font-semibold text-white rounded-lg py-2.5 transition-opacity hover:opacity-90"
+            <button onClick={submit} disabled={cargando}
+              className="w-full text-sm font-semibold text-white rounded-lg py-2.5 transition-opacity hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
               style={{ background: BRAND.abismo }}>
-              Ingresar
+              {cargando ? (<><Loader2 size={16} className="animate-spin" /> Ingresando...</>) : "Ingresar"}
             </button>
-          </div>
-
-          <div className="mt-5 pt-5 border-t border-slate-100">
-            <p className="text-xs text-slate-400 mb-2">Usuarios de prueba:</p>
-            <div className="flex flex-wrap gap-1.5">
-              {USUARIOS.map((u) => (
-                <button key={u.user}
-                  onClick={() => { setUser(u.user); setPass(u.pass); }}
-                  className="text-xs px-2 py-1 rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 transition-colors">
-                  {u.user}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
         <p className="text-center text-xs text-white/50 mt-5">
-          Prototipo interno · Sturla Viajes · Delta del Paraná
+          Sturla Viajes · Canal de Agencias · Delta del Paraná
         </p>
       </div>
     </div>
@@ -1404,14 +1406,134 @@ const NAV = [
   { key: "distribucion", label: "Equipo", icon: Users },
 ];
 
+// Indicador de estado de sincronización con la nube
+function SyncBadge({ habilitado, estado }) {
+  if (!habilitado) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-full bg-amber-50 text-amber-700"
+        title="Los cambios solo se guardan en este navegador">
+        <CloudOff size={14} /> Modo local
+      </span>
+    );
+  }
+  const cfg = {
+    idle:      { icon: Cloud, txt: "En la nube", cls: "bg-emerald-50 text-emerald-700", spin: false },
+    guardando: { icon: Loader2, txt: "Guardando…", cls: "bg-sky-50 text-sky-700", spin: true },
+    guardado:  { icon: CheckCircle2, txt: "Guardado", cls: "bg-emerald-50 text-emerald-700", spin: false },
+    error:     { icon: AlertTriangle, txt: "Error al guardar", cls: "bg-rose-50 text-rose-700", spin: false },
+  }[estado] || { icon: Cloud, txt: "En la nube", cls: "bg-emerald-50 text-emerald-700", spin: false };
+  const Icon = cfg.icon;
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-full ${cfg.cls}`}>
+      <Icon size={14} className={cfg.spin ? "animate-spin" : ""} /> {cfg.txt}
+    </span>
+  );
+}
+
 export default function App() {
   const [usuario, setUsuario] = useState(null);
+  const [verificandoSesion, setVerificandoSesion] = useState(supabaseHabilitado);
+
+  // Recuperar sesión activa al iniciar (si ya inició sesión antes)
+  useEffect(() => {
+    if (!supabaseHabilitado) { setVerificandoSesion(false); return; }
+    let activo = true;
+    (async () => {
+      try {
+        const sesion = await getSession();
+        if (activo && sesion?.user) setUsuario(sesion.user);
+      } catch (e) {
+        console.error("Error verificando sesión:", e);
+      } finally {
+        if (activo) setVerificandoSesion(false);
+      }
+    })();
+    // Escuchar cambios de sesión (logout en otra pestaña, expiración, etc.)
+    const { data } = onAuthChange((sesion) => {
+      if (activo) setUsuario(sesion?.user || null);
+    });
+    return () => { activo = false; data?.subscription?.unsubscribe?.(); };
+  }, []);
   const [vista, setVista] = useState("dashboard");
-  const [agencias, setAgencias] = useState(AGENCIAS);
+  const [agencias, setAgencias] = useState([]);
   const [pipeline, setPipeline] = useState(PIPELINE_INICIAL);
   const [productos, setProductos] = useState(PRODUCTOS_INICIALES);
 
+  // Estado de sincronización con la nube
+  const [cargando, setCargando] = useState(supabaseHabilitado);
+  const [syncEstado, setSyncEstado] = useState("idle"); // idle | guardando | guardado | error
+  const primeraCarga = useRef(true);
+
+  // Cargar datos de Supabase al iniciar (una vez)
+  useEffect(() => {
+    if (!supabaseHabilitado) { setCargando(false); return; }
+    let activo = true;
+    (async () => {
+      try {
+        const datos = await cargarDatos([], PRODUCTOS_INICIALES);
+        if (activo && datos) {
+          setAgencias(datos.agencias);
+          setProductos(datos.productos);
+        }
+      } catch (e) {
+        console.error("Error cargando de Supabase:", e);
+        if (activo) setSyncEstado("error");
+      } finally {
+        if (activo) { setCargando(false); }
+      }
+    })();
+    return () => { activo = false; };
+  }, []);
+
+  // Guardar agencias automáticamente cuando cambian (con debounce)
+  useEffect(() => {
+    if (!supabaseHabilitado || cargando) return;
+    setSyncEstado("guardando");
+    const t = setTimeout(async () => {
+      try {
+        await guardarAgencias(agencias);
+        setSyncEstado("guardado");
+        setTimeout(() => setSyncEstado("idle"), 1500);
+      } catch (e) {
+        console.error("Error guardando agencias:", e);
+        setSyncEstado("error");
+      }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [agencias, cargando]);
+
+  // Guardar productos automáticamente cuando cambian (con debounce)
+  useEffect(() => {
+    if (!supabaseHabilitado || cargando) return;
+    const t = setTimeout(async () => {
+      try {
+        await guardarProductos(productos);
+      } catch (e) {
+        console.error("Error guardando productos:", e);
+      }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [productos, cargando]);
+
+  if (verificandoSesion) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: BRAND.abismo }}>
+        <Loader2 size={40} className="text-white animate-spin mb-4" />
+        <p className="text-white/80 text-sm">Verificando sesión...</p>
+      </div>
+    );
+  }
+
   if (!usuario) return <Login onLogin={setUsuario} />;
+
+  if (cargando) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: BRAND.abismo }}>
+        <Loader2 size={40} className="text-white animate-spin mb-4" />
+        <p className="text-white/80 text-sm">Cargando datos del canal...</p>
+      </div>
+    );
+  }
 
   const addAgencia = (a) => {
     const geo = geoDeCiudad(a.ciudad, Date.now());
@@ -1509,13 +1631,13 @@ export default function App() {
 
         <div className="px-3 py-4 border-t border-white/10">
           <div className="flex items-center gap-3 px-2 py-2">
-            <Avatar name={usuario.nombre} size={36} />
+            <Avatar name={usuario.email || "Usuario"} size={36} />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-white truncate">{usuario.nombre}</p>
-              <p className="text-xs text-white/50 truncate">{usuario.rol}</p>
+              <p className="text-sm font-medium text-white truncate">{usuario.email || "Usuario"}</p>
+              <p className="text-xs text-white/50 truncate">Sesión activa</p>
             </div>
           </div>
-          <button onClick={() => setUsuario(null)}
+          <button onClick={async () => { await signOut(); setUsuario(null); }}
             className="w-full flex items-center gap-2 px-2 py-2 mt-1 rounded-lg text-sm font-medium text-white/60 hover:text-white hover:bg-white/6 transition-colors">
             <LogOut size={16} /> Cerrar sesión
           </button>
@@ -1524,9 +1646,12 @@ export default function App() {
 
       {/* Main */}
       <main className="flex-1 ml-60">
-        <header className="bg-white border-b border-slate-200 px-8 py-5 sticky top-0 z-10">
-          <h1 className="text-xl font-bold text-slate-800 tracking-tight">{titulos[vista].t}</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{titulos[vista].s}</p>
+        <header className="bg-white border-b border-slate-200 px-8 py-5 sticky top-0 z-10 flex items-start justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-slate-800 tracking-tight">{titulos[vista].t}</h1>
+            <p className="text-sm text-slate-500 mt-0.5">{titulos[vista].s}</p>
+          </div>
+          <SyncBadge habilitado={supabaseHabilitado} estado={syncEstado} />
         </header>
 
         <div className="p-8">
