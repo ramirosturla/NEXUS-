@@ -197,3 +197,46 @@ export async function guardarEquipo(miembros) {
     await supabase.from("equipo").delete().neq("id", -1);
   }
 }
+
+// ─────────────────────────────────────────────────────────────
+// PRESUPUESTO DE MARKETING
+// ─────────────────────────────────────────────────────────────
+const presupuestoToDB = (p) => ({
+  id: p.id,
+  anio: p.anio || null,
+  mes: p.mes || null,
+  mes_nro: p.mesNro || null,
+  categoria: p.categoria,
+  canal: p.canal || null,
+  proyectado: p.proyectado || 0,
+  ejecutado: p.ejecutado || 0,
+});
+const presupuestoFromDB = (r) => ({
+  id: r.id,
+  anio: r.anio,
+  mes: r.mes || "",
+  mesNro: r.mes_nro,
+  categoria: r.categoria,
+  canal: r.canal || "",
+  proyectado: Number(r.proyectado) || 0,
+  ejecutado: Number(r.ejecutado) || 0,
+});
+
+export async function fetchPresupuesto() {
+  if (!supabaseHabilitado) return [];
+  const { data, error } = await supabase.from("presupuesto").select("*");
+  if (error) throw error;
+  return (data || []).map(presupuestoFromDB);
+}
+
+export async function guardarPresupuesto(items) {
+  if (!supabaseHabilitado) return;
+  const ids = items.map((i) => i.id);
+  if (items.length) {
+    const { error } = await supabase.from("presupuesto").upsert(items.map(presupuestoToDB));
+    if (error) throw error;
+    await supabase.from("presupuesto").delete().not("id", "in", `(${ids.map((x) => `"${x}"`).join(",")})`);
+  } else {
+    await supabase.from("presupuesto").delete().neq("id", "___nunca___");
+  }
+}
