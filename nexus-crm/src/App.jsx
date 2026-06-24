@@ -13,14 +13,14 @@ import {
   Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import {
-  BRAND, USUARIOS, EJECUTIVOS, EXCURSIONES, ESTADOS_AGENCIA, ETAPAS,
+  BRAND, USUARIOS, EXCURSIONES, ESTADOS_AGENCIA, ETAPAS,
   AGENCIAS, DATOS_MENSUALES, ZONAS, fmt, totalPax,
   totalFacturado, geoDeCiudad, resumenPorZona, PRODUCTOS_INICIALES,
   CONDICIONES_PAGO, precioAgencia, parseRankingWorkbook,
 } from "./data";
 import * as XLSX from "xlsx";
 import { supabaseHabilitado } from "./supabaseClient";
-import { cargarDatos, guardarAgencias, guardarProductos, signIn, signOut, getSession, onAuthChange } from "./storage";
+import { cargarDatos, guardarAgencias, guardarProductos, signIn, signOut, getSession, onAuthChange, fetchEquipo, guardarEquipo } from "./storage";
 
 // ═════════════════════════════════════════════════════════════
 // Logo de Sturla recreado en SVG (timón + texto)
@@ -196,7 +196,7 @@ function Login({ onLogin }) {
             </div>
           </div>
           <p className="text-center text-xs text-slate-400 mt-5">
-            Sturla Viajes \u00b7 Canal de Agencias
+            Sturla Viajes · Canal de Agencias
           </p>
         </div>
       </div>
@@ -321,7 +321,7 @@ function Dashboard({ agencias }) {
 // ═════════════════════════════════════════════════════════════
 // VISTA: Agencias (lista + detalle)
 // ═════════════════════════════════════════════════════════════
-function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, setPreciosAgencia, importarAgencias, addReserva, updateReserva, deleteReserva, updateAgencia }) {
+function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, setPreciosAgencia, importarAgencias, addReserva, updateReserva, deleteReserva, updateAgencia, nombresEquipo }) {
   const [sel, setSel] = useState(null);
   const [search, setSearch] = useState("");
   const [filtro, setFiltro] = useState("Todas");
@@ -464,7 +464,7 @@ function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, s
         )}
       </div>
 
-      {showForm && <AgenciaForm onClose={() => setShowForm(false)} onSave={addAgencia} />}
+      {showForm && <AgenciaForm onClose={() => setShowForm(false)} onSave={addAgencia} nombresEquipo={nombresEquipo} />}
     </div>
   );
 }
@@ -1001,10 +1001,10 @@ function VisitaForm({ agNombre, onClose, onSave }) {
 }
 
 // Formulario de nueva agencia
-function AgenciaForm({ onClose, onSave }) {
+function AgenciaForm({ onClose, onSave, nombresEquipo = [] }) {
   const [form, setForm] = useState({
     nombre: "", contacto: "", email: "", telefono: "", ciudad: "", direccion: "",
-    estado: "Prospecto", ejecutivo: EJECUTIVOS[0],
+    estado: "Prospecto", ejecutivo: nombresEquipo[0] || "",
   });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
 
@@ -1063,7 +1063,8 @@ function AgenciaForm({ onClose, onSave }) {
             <Field label="Ejecutivo">
               <select value={form.ejecutivo} onChange={set("ejecutivo")}
                 className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
-                {EJECUTIVOS.map((v) => <option key={v}>{v}</option>)}
+                {nombresEquipo.length === 0 && <option value="">Agregá miembros en Equipo</option>}
+                {nombresEquipo.map((v) => <option key={v}>{v}</option>)}
               </select>
             </Field>
           </div>
@@ -1480,13 +1481,21 @@ function Pipeline({ agencias, updateAgencia }) {
 // ═════════════════════════════════════════════════════════════
 // VISTA: Distribución (equipo)
 // ═════════════════════════════════════════════════════════════
-function Distribucion({ agencias }) {
-  const [activos, setActivos] = useState(Object.fromEntries(EJECUTIVOS.map((v) => [v, true])));
+function Distribucion({ agencias, equipo, addMiembro, updateMiembro, deleteMiembro }) {
   const [roundRobin, setRoundRobin] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [nuevoNombre, setNuevoNombre] = useState("");
+  const [nuevoRol, setNuevoRol] = useState("Ejecutivo");
 
   const agenciasDe = (v) => agencias.filter((a) => a.ejecutivo === v);
   const paxDe = (v) => agenciasDe(v).reduce((s, a) => s + totalPax(a), 0);
-  const maxPax = Math.max(...EJECUTIVOS.map(paxDe), 1);
+  const maxPax = Math.max(...equipo.map((m) => paxDe(m.nombre)), 1);
+
+  const crear = () => {
+    if (!nuevoNombre.trim()) return;
+    addMiembro(nuevoNombre, nuevoRol);
+    setNuevoNombre(""); setNuevoRol("Ejecutivo"); setShowForm(false);
+  };
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -1517,34 +1526,89 @@ function Distribucion({ agencias }) {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-100">
-          <h3 className="font-semibold text-slate-800">Equipo de cuentas</h3>
-          <p className="text-sm text-slate-500 mt-0.5">Carga de agencias y pasajeros por ejecutivo</p>
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-slate-800">Equipo de cuentas</h3>
+            <p className="text-sm text-slate-500 mt-0.5">Carga de agencias y pasajeros por miembro</p>
+          </div>
+          <button onClick={() => setShowForm(true)}
+            className="inline-flex items-center gap-1.5 text-white text-sm font-medium px-3 py-2 rounded-lg transition-opacity hover:opacity-90 shrink-0"
+            style={{ background: BRAND.abismo }}>
+            <Plus size={15} /> Agregar miembro
+          </button>
         </div>
+
+        {showForm && (
+          <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex flex-col sm:flex-row gap-3 sm:items-end">
+            <div className="flex-1">
+              <span className="text-xs font-medium text-slate-500 mb-1.5 block">Nombre</span>
+              <input value={nuevoNombre} onChange={(e) => setNuevoNombre(e.target.value)} autoFocus
+                onKeyDown={(e) => e.key === "Enter" && crear()}
+                placeholder="Nombre y apellido"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
+            </div>
+            <div className="w-full sm:w-40">
+              <span className="text-xs font-medium text-slate-500 mb-1.5 block">Rol</span>
+              <select value={nuevoRol} onChange={(e) => setNuevoRol(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+                <option>Ejecutivo</option><option>Líder</option>
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setShowForm(false); setNuevoNombre(""); }}
+                className="text-sm font-medium text-slate-600 border border-slate-200 rounded-lg px-4 py-2 hover:bg-white">Cancelar</button>
+              <button onClick={crear}
+                className="text-sm font-medium text-white rounded-lg px-4 py-2 hover:opacity-90" style={{ background: BRAND.verdeOk }}>Agregar</button>
+            </div>
+          </div>
+        )}
+
         <div className="divide-y divide-slate-100">
-          {EJECUTIVOS.map((v) => {
-            const nAg = agenciasDe(v).length;
-            const pax = paxDe(v);
+          {equipo.length === 0 && (
+            <div className="px-6 py-10 text-center text-slate-400 text-sm">
+              No hay miembros en el equipo. Agregá el primero con el botón de arriba.
+            </div>
+          )}
+          {equipo.map((m) => {
+            const nAg = agenciasDe(m.nombre).length;
+            const pax = paxDe(m.nombre);
+            const esLider = m.rol === "Líder";
             return (
-              <div key={v} className="flex items-center justify-between px-6 py-4">
-                <div className="flex items-center gap-3">
-                  <Avatar name={v} size={40} />
-                  <div>
-                    <p className="font-medium text-slate-800">{v}</p>
+              <div key={m.id} className="flex items-center justify-between px-6 py-4 gap-3"
+                style={{ opacity: m.activo ? 1 : 0.55 }}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <Avatar name={m.nombre} size={40} />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-slate-800 truncate">{m.nombre}</p>
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0"
+                        style={esLider ? { color: "#7c3aed", background: "#f3e8ff" } : { color: BRAND.marea, background: BRAND.espuma }}>
+                        {m.rol}
+                      </span>
+                    </div>
                     <p className="text-xs text-slate-500">
                       {nAg} {nAg === 1 ? "agencia" : "agencias"} · {pax} pasajeros
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="w-32 h-2 bg-slate-100 rounded-full overflow-hidden hidden sm:block">
+                <div className="flex items-center gap-2 shrink-0">
+                  <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden hidden sm:block">
                     <div className="h-full rounded-full transition-all" style={{ width: (pax / maxPax * 100) + "%", background: BRAND.turquesa }} />
                   </div>
-                  <button onClick={() => setActivos({ ...activos, [v]: !activos[v] })}
+                  <button onClick={() => updateMiembro(m.id, { rol: esLider ? "Ejecutivo" : "Líder" })}
+                    title="Cambiar rol"
+                    className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-cyan-600">
+                    <Tag size={15} />
+                  </button>
+                  <button onClick={() => updateMiembro(m.id, { activo: !m.activo })}
                     className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${
-                      activos[v] ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                      m.activo ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                     }`}>
-                    {activos[v] ? "Activo" : "Inactivo"}
+                    {m.activo ? "Activo" : "Inactivo"}
+                  </button>
+                  <button onClick={() => deleteMiembro(m.id)} title="Eliminar miembro"
+                    className="w-8 h-8 rounded-lg hover:bg-rose-50 flex items-center justify-center text-slate-400 hover:text-rose-600">
+                    <Trash2 size={15} />
                   </button>
                 </div>
               </div>
@@ -1619,6 +1683,7 @@ export default function App() {
   const [vista, setVista] = useState("dashboard");
   const [agencias, setAgencias] = useState([]);
   const [productos, setProductos] = useState(PRODUCTOS_INICIALES);
+  const [equipo, setEquipo] = useState([]);
 
   // Estado de sincronización con la nube
   const [cargando, setCargando] = useState(supabaseHabilitado);
@@ -1636,6 +1701,9 @@ export default function App() {
           setAgencias(datos.agencias);
           setProductos(datos.productos);
         }
+        // Cargar equipo (arranca vacío; los miembros se crean desde la vista Equipo)
+        const eq = await fetchEquipo();
+        if (activo) setEquipo(eq);
       } catch (e) {
         console.error("Error cargando de Supabase:", e);
         if (activo) setSyncEstado("error");
@@ -1675,6 +1743,19 @@ export default function App() {
     }, 800);
     return () => clearTimeout(t);
   }, [productos, cargando]);
+
+  // Guardar equipo automáticamente cuando cambia (con debounce)
+  useEffect(() => {
+    if (!supabaseHabilitado || cargando) return;
+    const t = setTimeout(async () => {
+      try {
+        await guardarEquipo(equipo);
+      } catch (e) {
+        console.error("Error guardando equipo:", e);
+      }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [equipo, cargando]);
 
   if (verificandoSesion) {
     return (
@@ -1745,6 +1826,8 @@ export default function App() {
       a.id === agId ? { ...a, ...cambios } : a
     ));
 
+  const nombresEquipo = equipo.filter((m) => m.activo).map((m) => m.nombre);
+
   // Importa agencias del Excel: agrega las que no existan (por nombre)
   const importarAgencias = (nuevas) => {
     setAgencias((prev) => {
@@ -1760,7 +1843,7 @@ export default function App() {
             ciudad: "CABA", direccion: "Importada del ranking anual",
             ...geo,
             estado: "Activa",
-            ejecutivo: EJECUTIVOS[i % EJECUTIVOS.length],
+            ejecutivo: nombresEquipo.length ? nombresEquipo[i % nombresEquipo.length] : "Sin asignar",
             desde: new Date().toISOString().slice(0, 10),
             condicionPago: "Contado",
             precios: {},
@@ -1773,6 +1856,14 @@ export default function App() {
       return [...aAgregar, ...prev];
     });
   };
+
+  // Lista de nombres del equipo activo (para selectores de "ejecutivo a cargo")
+  const addMiembro = (nombre, rol) =>
+    setEquipo([...equipo, { id: Date.now(), nombre: nombre.trim(), rol, activo: true }]);
+  const updateMiembro = (id, cambios) =>
+    setEquipo(equipo.map((m) => (m.id === id ? { ...m, ...cambios } : m)));
+  const deleteMiembro = (id) =>
+    setEquipo(equipo.filter((m) => m.id !== id));
 
   const titulos = {
     dashboard: { t: "Dashboard del canal", s: "Visión general de agencias y pasajeros" },
@@ -1841,11 +1932,11 @@ export default function App() {
 
         <div className="p-8">
           {vista === "dashboard" && <Dashboard agencias={agencias} />}
-          {vista === "agencias" && <Agencias agencias={agencias} addAgencia={addAgencia} addVisita={addVisita} deleteAgencia={deleteAgencia} productos={productos} setPreciosAgencia={setPreciosAgencia} importarAgencias={importarAgencias} addReserva={addReserva} updateReserva={updateReserva} deleteReserva={deleteReserva} updateAgencia={updateAgencia} />}
+          {vista === "agencias" && <Agencias agencias={agencias} addAgencia={addAgencia} addVisita={addVisita} deleteAgencia={deleteAgencia} productos={productos} setPreciosAgencia={setPreciosAgencia} importarAgencias={importarAgencias} addReserva={addReserva} updateReserva={updateReserva} deleteReserva={deleteReserva} updateAgencia={updateAgencia} nombresEquipo={nombresEquipo} />}
           {vista === "productos" && <Productos productos={productos} setProductos={setProductos} />}
           {vista === "mapa" && <MapaZonas agencias={agencias} />}
           {vista === "pipeline" && <Pipeline agencias={agencias} updateAgencia={updateAgencia} />}
-          {vista === "distribucion" && <Distribucion agencias={agencias} />}
+          {vista === "distribucion" && <Distribucion agencias={agencias} equipo={equipo} addMiembro={addMiembro} updateMiembro={updateMiembro} deleteMiembro={deleteMiembro} />}
         </div>
       </main>
     </div>
