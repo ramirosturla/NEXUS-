@@ -161,3 +161,39 @@ export function onAuthChange(callback) {
   if (!supabaseHabilitado) return { data: { subscription: { unsubscribe() {} } } };
   return supabase.auth.onAuthStateChange((_event, session) => callback(session));
 }
+
+// ─────────────────────────────────────────────────────────────
+// EQUIPO (miembros: ejecutivos y líderes)
+// ─────────────────────────────────────────────────────────────
+const miembroToDB = (m) => ({
+  id: m.id,
+  nombre: m.nombre,
+  rol: m.rol || "Ejecutivo",
+  activo: m.activo !== false,
+});
+const miembroFromDB = (r) => ({
+  id: r.id,
+  nombre: r.nombre,
+  rol: r.rol || "Ejecutivo",
+  activo: r.activo !== false,
+});
+
+export async function fetchEquipo() {
+  if (!supabaseHabilitado) return [];
+  const { data, error } = await supabase.from("equipo").select("*").order("nombre");
+  if (error) throw error;
+  return (data || []).map(miembroFromDB);
+}
+
+export async function guardarEquipo(miembros) {
+  if (!supabaseHabilitado) return;
+  const ids = miembros.map((m) => m.id);
+  const { error } = await supabase.from("equipo").upsert(miembros.map(miembroToDB));
+  if (error) throw error;
+  // Borrar los que ya no están
+  if (ids.length) {
+    await supabase.from("equipo").delete().not("id", "in", `(${ids.join(",")})`);
+  } else {
+    await supabase.from("equipo").delete().neq("id", -1);
+  }
+}
