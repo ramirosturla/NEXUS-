@@ -89,8 +89,6 @@ const CIUDADES = {
   "Tigre":         { zona: "GBA Norte",       lat: -34.4264, lng: -58.5796 },
   "Mar del Plata": { zona: "Costa Atlántica", lat: -38.0055, lng: -57.5426 },
   "Rosario":       { zona: "Litoral",         lat: -32.9442, lng: -60.6505 },
-  "Rafela":       { zona: "Litoral",         lat: -31.266, lng: -61.483 },
-  "San Francisco":       { zona: "Litoral",         lat: -31.4355, lng: -62.0713 },
   "Mendoza":       { zona: "Cuyo",            lat: -32.8895, lng: -68.8458 },
   "Bariloche":     { zona: "Patagonia",       lat: -41.1335, lng: -71.3103 },
   "Salta":         { zona: "NOA",             lat: -24.7821, lng: -65.4232 },
@@ -379,4 +377,67 @@ export const parseRankingWorkbook = (workbook, XLSX) => {
   }
   out.sort((a, b) => b.total - a.total);
   return { anio, hoja, agencias: out, total: out.length };
+};
+
+// ─────────────────────────────────────────────────────────────
+// PRESUPUESTO DE MARKETING
+// ─────────────────────────────────────────────────────────────
+
+// Categorías de gasto de marketing (colores para los gráficos)
+export const CATEGORIAS_MKT = [
+  { nombre: "Meta Ads", color: "#0f3d63" },
+  { nombre: "Google Ads", color: "#16a3b8" },
+  { nombre: "Publicidad Digital", color: "#0891b2" },
+  { nombre: "Agencias", color: "#0e7490" },
+  { nombre: "Producción", color: "#155e75" },
+  { nombre: "Web / Mantenimiento", color: "#0284c7" },
+  { nombre: "Sueldos", color: "#1e40af" },
+  { nombre: "Honorarios", color: "#0d9488" },
+  { nombre: "Vía Pública", color: "#f59e0b" },
+  { nombre: "Otros", color: "#64748b" },
+];
+
+const colorCategoria = (cat) => {
+  const hit = CATEGORIAS_MKT.find((c) => cat.toLowerCase().includes(c.nombre.toLowerCase().split(" ")[0]));
+  return hit ? hit.color : "#64748b";
+};
+export { colorCategoria };
+
+// Parser del Excel de presupuesto (hoja "INPUT_Ejecutado")
+// Estructura: AÑO | MES_NRO | MES | CATEGORÍA | CANAL_TIPO | PROYECTADO | EJECUTADO | ...
+// (los datos arrancan en la columna B = índice 1, encabezado en fila 4)
+export const parsePresupuestoWorkbook = (wb, XLSX) => {
+  // Buscar la hoja de ejecutado (la más completa); si no, la de proyectado
+  let hoja = wb.SheetNames.find((s) => /ejecutado/i.test(s));
+  if (!hoja) hoja = wb.SheetNames.find((s) => /presupuesto/i.test(s));
+  if (!hoja) throw new Error("No se encontró una hoja de presupuesto en el Excel.");
+
+  const ws = wb.Sheets[hoja];
+  const filas = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+  const toNum = (v) =>
+    typeof v === "number" ? v : (v != null && !isNaN(parseFloat(v)) ? parseFloat(v) : 0);
+
+  const items = [];
+  // Datos desde la fila 5 (índice 4). XLSX omite la columna A vacía, así que:
+  // índice 0=AÑO, 1=MES_NRO, 2=MES, 3=CATEGORÍA, 4=CANAL, 5=PROYECTADO, 6=EJECUTADO
+  for (let i = 4; i < filas.length; i++) {
+    const f = filas[i] || [];
+    const anio = f[0];
+    const mesNro = f[1];
+    const mes = f[2] != null ? String(f[2]).trim() : "";
+    const categoria = f[3] != null ? String(f[3]).trim() : "";
+    const canal = f[4] != null ? String(f[4]).trim() : "";
+    const proyectado = toNum(f[5]);
+    const ejecutado = toNum(f[6]);
+    // Saltar filas sin categoría/mes o totales
+    if (!categoria || !mes || categoria.toLowerCase().includes("total")) continue;
+    if (proyectado === 0 && ejecutado === 0) continue;
+    items.push({
+      id: `pre-${mes}-${categoria}-${Math.random().toString(36).slice(2, 7)}`,
+      anio: anio || new Date().getFullYear(),
+      mes, mesNro: mesNro || 0, categoria, canal, proyectado, ejecutado,
+    });
+  }
+  return { hoja, items, total: items.length };
 };
