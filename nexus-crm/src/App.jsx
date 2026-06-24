@@ -6,7 +6,7 @@ import {
   MapPin, Mail, Phone, CheckCircle2, Clock, XCircle, Filter, Zap,
   Map as MapIcon, NotebookPen, CalendarClock, Trash2, Tag,
   CreditCard, Upload, Package, Pencil, AlertTriangle, FileSpreadsheet,
-  Cloud, CloudOff, Loader2,
+  Cloud, CloudOff, Loader2, Megaphone, Wallet, TrendingDown,
 } from "lucide-react";
 import {
   BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -17,10 +17,11 @@ import {
   AGENCIAS, DATOS_MENSUALES, ZONAS, fmt, totalPax,
   totalFacturado, geoDeCiudad, resumenPorZona, PRODUCTOS_INICIALES,
   CONDICIONES_PAGO, precioAgencia, parseRankingWorkbook,
+  CATEGORIAS_MKT, colorCategoria, parsePresupuestoWorkbook,
 } from "./data";
 import * as XLSX from "xlsx";
 import { supabaseHabilitado } from "./supabaseClient";
-import { cargarDatos, guardarAgencias, guardarProductos, signIn, signOut, getSession, onAuthChange, fetchEquipo, guardarEquipo } from "./storage";
+import { cargarDatos, guardarAgencias, guardarProductos, signIn, signOut, getSession, onAuthChange, fetchEquipo, guardarEquipo, fetchPresupuesto, guardarPresupuesto } from "./storage";
 
 // ═════════════════════════════════════════════════════════════
 // Logo de Sturla recreado en SVG (timón + texto)
@@ -1479,6 +1480,231 @@ function Pipeline({ agencias, updateAgencia }) {
 }
 
 // ═════════════════════════════════════════════════════════════
+// VISTA: Marketing — Presupuesto
+// ═════════════════════════════════════════════════════════════
+function Marketing({ presupuesto, importarPresupuesto, limpiarPresupuesto }) {
+  const [importando, setImportando] = useState(false);
+  const [error, setError] = useState("");
+  const [mesFiltro, setMesFiltro] = useState("Todos");
+  const fileRef = useRef(null);
+
+  const MESES_ORD = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+  const onFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportando(true); setError("");
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: "array" });
+      const res = parsePresupuestoWorkbook(wb, XLSX);
+      if (res.items.length === 0) {
+        setError("No se encontraron datos de presupuesto en el archivo.");
+      } else {
+        importarPresupuesto(res.items);
+      }
+    } catch (err) {
+      console.error(err);
+      setError("No se pudo leer el archivo. Verificá que sea el Excel de presupuesto.");
+    }
+    setImportando(false);
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  // Filtrar por mes
+  const items = mesFiltro === "Todos" ? presupuesto : presupuesto.filter((p) => p.mes === mesFiltro);
+
+  // Totales
+  const totalProy = items.reduce((s, p) => s + p.proyectado, 0);
+  const totalEjec = items.reduce((s, p) => s + p.ejecutado, 0);
+  const variacion = totalEjec - totalProy;
+  const pctEjec = totalProy > 0 ? (totalEjec / totalProy * 100) : 0;
+
+  // Agrupar por categoría
+  const porCategoria = useMemo(() => {
+    const acc = {};
+    for (const p of items) {
+      if (!acc[p.categoria]) acc[p.categoria] = { categoria: p.categoria, proyectado: 0, ejecutado: 0, color: colorCategoria(p.categoria) };
+      acc[p.categoria].proyectado += p.proyectado;
+      acc[p.categoria].ejecutado += p.ejecutado;
+    }
+    return Object.values(acc).sort((a, b) => b.proyectado - a.proyectado);
+  }, [items]);
+
+  // Evolución mensual (todos los meses)
+  const porMes = useMemo(() => {
+    const acc = {};
+    MESES_ORD.forEach((m) => { acc[m] = { mes: m, proyectado: 0, ejecutado: 0 }; });
+    for (const p of presupuesto) {
+      if (acc[p.mes]) { acc[p.mes].proyectado += p.proyectado; acc[p.mes].ejecutado += p.ejecutado; }
+    }
+    return MESES_ORD.map((m) => acc[m]).filter((x) => x.proyectado > 0 || x.ejecutado > 0);
+  }, [presupuesto]);
+
+  const mesesConDatos = ["Todos", ...MESES_ORD.filter((m) => presupuesto.some((p) => p.mes === m))];
+
+  if (presupuesto.length === 0) {
+    return (
+      <div className="max-w-xl mx-auto text-center py-16">
+        <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5" style={{ background: BRAND.espuma }}>
+          <Wallet size={32} style={{ color: BRAND.turquesa }} />
+        </div>
+        <h3 className="text-lg font-bold text-slate-800">Cargá tu presupuesto de marketing</h3>
+        <p className="text-sm text-slate-500 mt-2 mb-6">
+          Importá el Excel de presupuesto y vas a ver el proyectado vs. ejecutado por categoría, la variación y la evolución mes a mes.
+        </p>
+        <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls" onChange={onFile} className="hidden" />
+        <button onClick={() => fileRef.current?.click()} disabled={importando}
+          className="inline-flex items-center gap-2 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-opacity hover:opacity-90 disabled:opacity-60"
+          style={{ background: BRAND.abismo }}>
+          {importando ? <><Loader2 size={16} className="animate-spin" /> Leyendo...</> : <><Upload size={16} /> Importar Excel de presupuesto</>}
+        </button>
+        {error && <p className="text-sm text-rose-600 mt-4">{error}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Barra de acciones */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-slate-500">Mes:</span>
+          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5 flex-wrap">
+            {mesesConDatos.map((m) => (
+              <button key={m} onClick={() => setMesFiltro(m)}
+                className="text-xs font-medium px-2.5 py-1 rounded-md transition-colors"
+                style={mesFiltro === m ? { background: "#fff", color: BRAND.abismo, boxShadow: "0 1px 2px rgba(0,0,0,0.06)" } : { color: "#64748b" }}>
+                {m}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls" onChange={onFile} className="hidden" />
+          <button onClick={() => fileRef.current?.click()} disabled={importando}
+            className="inline-flex items-center gap-2 text-white text-sm font-medium px-4 py-2 rounded-lg transition-opacity hover:opacity-90 disabled:opacity-60"
+            style={{ background: BRAND.abismo }}>
+            {importando ? <><Loader2 size={15} className="animate-spin" /> Leyendo...</> : <><Upload size={15} /> Reimportar Excel</>}
+          </button>
+          <button onClick={limpiarPresupuesto} title="Borrar todo el presupuesto"
+            className="w-9 h-9 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-rose-600 hover:border-rose-200">
+            <Trash2 size={16} />
+          </button>
+        </div>
+      </div>
+      {error && <p className="text-sm text-rose-600">{error}</p>}
+
+      {/* KPIs */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard icon={Wallet} label="Presupuestado" value={fmt(totalProy)} accent={BRAND.marea} />
+        <KpiCard icon={DollarSign} label="Ejecutado" value={fmt(totalEjec)} accent={BRAND.turquesa} />
+        <KpiCard icon={variacion > 0 ? TrendingUp : TrendingDown}
+          label={variacion > 0 ? "Sobre-ejecución" : "Ahorro"} value={fmt(Math.abs(variacion))}
+          accent={variacion > 0 ? BRAND.alerta : BRAND.verdeOk} />
+        <KpiCard icon={TrendingUp} label="% de ejecución" value={pctEjec.toFixed(0) + "%"} accent="#0891b2" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Proyectado vs Ejecutado por categoría */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h3 className="font-semibold text-slate-800 mb-1">Proyectado vs. ejecutado por categoría</h3>
+          <p className="text-sm text-slate-500 mb-5">{mesFiltro === "Todos" ? "Acumulado del año" : mesFiltro}</p>
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={porCategoria} layout="vertical" margin={{ left: 30, right: 16 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+              <XAxis type="number" stroke="#94a3b8" fontSize={11} tickFormatter={(v) => "$" + (v / 1e6).toFixed(0) + "M"} />
+              <YAxis type="category" dataKey="categoria" stroke="#94a3b8" fontSize={10} width={120}
+                tickFormatter={(v) => v.length > 18 ? v.slice(0, 16) + "…" : v} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }}
+                formatter={(v) => fmt(v)} cursor={{ fill: "#f8fafc" }} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Bar dataKey="proyectado" name="Proyectado" fill={BRAND.marea} radius={[0, 4, 4, 0]} />
+              <Bar dataKey="ejecutado" name="Ejecutado" fill={BRAND.turquesa} radius={[0, 4, 4, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        {/* Evolución mensual */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h3 className="font-semibold text-slate-800 mb-1">Evolución mensual</h3>
+          <p className="text-sm text-slate-500 mb-5">Presupuestado vs. ejecutado a lo largo del año</p>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={porMes} margin={{ left: 0, right: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+              <XAxis dataKey="mes" stroke="#94a3b8" fontSize={12} />
+              <YAxis stroke="#94a3b8" fontSize={11} tickFormatter={(v) => "$" + (v / 1e6).toFixed(0) + "M"} />
+              <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }} formatter={(v) => fmt(v)} />
+              <Legend wrapperStyle={{ fontSize: 12 }} />
+              <Line type="monotone" dataKey="proyectado" name="Proyectado" stroke={BRAND.marea} strokeWidth={2.5} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="ejecutado" name="Ejecutado" stroke={BRAND.turquesa} strokeWidth={2.5} dot={{ r: 3 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Tabla detallada por categoría */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100">
+          <h3 className="font-semibold text-slate-800">Detalle por categoría</h3>
+          <p className="text-sm text-slate-500 mt-0.5">{mesFiltro === "Todos" ? "Acumulado del año" : `Mes de ${mesFiltro}`}</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50/70 text-left text-slate-500">
+                <th className="px-6 py-3 font-medium">Categoría</th>
+                <th className="px-6 py-3 font-medium text-right">Proyectado</th>
+                <th className="px-6 py-3 font-medium text-right">Ejecutado</th>
+                <th className="px-6 py-3 font-medium text-right">Variación</th>
+                <th className="px-6 py-3 font-medium text-right">% Ejec.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {porCategoria.map((c) => {
+                const v = c.ejecutado - c.proyectado;
+                const pct = c.proyectado > 0 ? (c.ejecutado / c.proyectado * 100) : 0;
+                return (
+                  <tr key={c.categoria} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
+                    <td className="px-6 py-3">
+                      <span className="inline-flex items-center gap-2">
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ background: c.color }} />
+                        <span className="font-medium text-slate-800">{c.categoria}</span>
+                      </span>
+                    </td>
+                    <td className="px-6 py-3 text-right text-slate-700">{fmt(c.proyectado)}</td>
+                    <td className="px-6 py-3 text-right font-semibold text-slate-800">{fmt(c.ejecutado)}</td>
+                    <td className="px-6 py-3 text-right font-medium" style={{ color: v > 0 ? BRAND.alerta : BRAND.verdeOk }}>
+                      {v > 0 ? "+" : ""}{fmt(v)}
+                    </td>
+                    <td className="px-6 py-3 text-right">
+                      <span className="text-xs font-semibold px-2 py-1 rounded-full"
+                        style={{ color: pct > 105 ? BRAND.alerta : pct >= 95 ? BRAND.verdeOk : BRAND.sol,
+                          background: pct > 105 ? "#ffe4e6" : pct >= 95 ? "#dcfce7" : "#fef3c7" }}>
+                        {pct.toFixed(0)}%
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr className="bg-slate-50 font-bold text-slate-800">
+                <td className="px-6 py-3">TOTAL</td>
+                <td className="px-6 py-3 text-right">{fmt(totalProy)}</td>
+                <td className="px-6 py-3 text-right">{fmt(totalEjec)}</td>
+                <td className="px-6 py-3 text-right" style={{ color: variacion > 0 ? BRAND.alerta : BRAND.verdeOk }}>
+                  {variacion > 0 ? "+" : ""}{fmt(variacion)}
+                </td>
+                <td className="px-6 py-3 text-right">{pctEjec.toFixed(0)}%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════
 // VISTA: Distribución (equipo)
 // ═════════════════════════════════════════════════════════════
 function Distribucion({ agencias, equipo, addMiembro, updateMiembro, deleteMiembro }) {
@@ -1629,6 +1855,7 @@ const NAV = [
   { key: "productos", label: "Productos", icon: Package },
   { key: "mapa", label: "Mapa de zonas", icon: MapIcon },
   { key: "pipeline", label: "Captación", icon: KanbanSquare },
+  { key: "marketing", label: "Marketing", icon: Megaphone },
   { key: "distribucion", label: "Equipo", icon: Users },
 ];
 
@@ -1684,6 +1911,7 @@ export default function App() {
   const [agencias, setAgencias] = useState([]);
   const [productos, setProductos] = useState(PRODUCTOS_INICIALES);
   const [equipo, setEquipo] = useState([]);
+  const [presupuesto, setPresupuesto] = useState([]);
 
   // Estado de sincronización con la nube
   const [cargando, setCargando] = useState(supabaseHabilitado);
@@ -1704,6 +1932,9 @@ export default function App() {
         // Cargar equipo (arranca vacío; los miembros se crean desde la vista Equipo)
         const eq = await fetchEquipo();
         if (activo) setEquipo(eq);
+        // Cargar presupuesto de marketing
+        const pre = await fetchPresupuesto();
+        if (activo) setPresupuesto(pre);
       } catch (e) {
         console.error("Error cargando de Supabase:", e);
         if (activo) setSyncEstado("error");
@@ -1756,6 +1987,19 @@ export default function App() {
     }, 800);
     return () => clearTimeout(t);
   }, [equipo, cargando]);
+
+  // Guardar presupuesto automáticamente cuando cambia (con debounce)
+  useEffect(() => {
+    if (!supabaseHabilitado || cargando) return;
+    const t = setTimeout(async () => {
+      try {
+        await guardarPresupuesto(presupuesto);
+      } catch (e) {
+        console.error("Error guardando presupuesto:", e);
+      }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [presupuesto, cargando]);
 
   if (verificandoSesion) {
     return (
@@ -1865,12 +2109,17 @@ export default function App() {
   const deleteMiembro = (id) =>
     setEquipo(equipo.filter((m) => m.id !== id));
 
+  // Presupuesto: reemplaza todo con lo importado del Excel
+  const importarPresupuesto = (items) => setPresupuesto(items);
+  const limpiarPresupuesto = () => setPresupuesto([]);
+
   const titulos = {
     dashboard: { t: "Dashboard del canal", s: "Visión general de agencias y pasajeros" },
     agencias: { t: "Gestión de agencias", s: "Detalle, histórico, precios y reservas" },
     productos: { t: "Productos y tarifas", s: "Catálogo de excursiones del canal" },
     mapa: { t: "Mapa de zonas", s: "Valor económico y pasajeros por región" },
     pipeline: { t: "Captación de agencias", s: "Tus agencias organizadas por etapa de captación" },
+    marketing: { t: "Marketing y Comunicación", s: "Presupuesto, inversión y ejecución del área" },
     distribucion: { t: "Equipo de cuentas", s: "Asignación y carga por ejecutivo" },
   };
 
@@ -1936,6 +2185,7 @@ export default function App() {
           {vista === "productos" && <Productos productos={productos} setProductos={setProductos} />}
           {vista === "mapa" && <MapaZonas agencias={agencias} />}
           {vista === "pipeline" && <Pipeline agencias={agencias} updateAgencia={updateAgencia} />}
+          {vista === "marketing" && <Marketing presupuesto={presupuesto} importarPresupuesto={importarPresupuesto} limpiarPresupuesto={limpiarPresupuesto} />}
           {vista === "distribucion" && <Distribucion agencias={agencias} equipo={equipo} addMiembro={addMiembro} updateMiembro={updateMiembro} deleteMiembro={deleteMiembro} />}
         </div>
       </main>
