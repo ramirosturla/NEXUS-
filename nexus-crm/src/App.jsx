@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import {
   BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend,
+  Tooltip, ResponsiveContainer, Legend, PieChart, Pie,
 } from "recharts";
 import {
   BRAND, USUARIOS, EXCURSIONES, ESTADOS_AGENCIA, ETAPAS,
@@ -1820,12 +1820,202 @@ function EquipoMarketing({ equipoMkt, addMiembroMkt, updateMiembroMkt, deleteMie
 }
 
 // ═════════════════════════════════════════════════════════════
+// VISTA: Estadísticas de Marketing (inversión + contenidos)
+// ═════════════════════════════════════════════════════════════
+function EstadisticasMkt({ presupuesto, contenidos }) {
+  const MESES_ORD = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+  // ── Inversión ──
+  const totalProy = presupuesto.reduce((s, p) => s + p.proyectado, 0);
+  const totalEjec = presupuesto.reduce((s, p) => s + p.ejecutado, 0);
+  const pctEjec = totalProy > 0 ? (totalEjec / totalProy * 100) : 0;
+
+  const invPorMes = useMemo(() => {
+    const acc = {};
+    MESES_ORD.forEach((m) => { acc[m] = { mes: m, ejecutado: 0 }; });
+    for (const p of presupuesto) if (acc[p.mes]) acc[p.mes].ejecutado += p.ejecutado;
+    return MESES_ORD.map((m) => acc[m]).filter((x) => x.ejecutado > 0);
+  }, [presupuesto]);
+
+  const topCategorias = useMemo(() => {
+    const acc = {};
+    for (const p of presupuesto) {
+      if (!acc[p.categoria]) acc[p.categoria] = { categoria: p.categoria, ejecutado: 0, color: colorCategoria(p.categoria) };
+      acc[p.categoria].ejecutado += p.ejecutado;
+    }
+    return Object.values(acc).sort((a, b) => b.ejecutado - a.ejecutado).slice(0, 6);
+  }, [presupuesto]);
+
+  // ── Contenidos ──
+  const totalCont = contenidos.length;
+  const publicados = contenidos.filter((c) => c.estado === "publicado").length;
+  const enProceso = contenidos.filter((c) => c.estado !== "publicado").length;
+
+  const contPorRed = useMemo(() => {
+    const acc = {};
+    for (const c of contenidos) {
+      const info = canalContenido(c.canal);
+      if (!acc[c.canal]) acc[c.canal] = { name: info.label, value: 0, color: info.color };
+      acc[c.canal].value += 1;
+    }
+    return Object.values(acc).sort((a, b) => b.value - a.value);
+  }, [contenidos]);
+
+  const contPorEstado = useMemo(() => {
+    return ESTADOS_CONTENIDO.map((e) => ({
+      estado: e.label, color: e.color,
+      cantidad: contenidos.filter((c) => c.estado === e.key).length,
+    })).filter((x) => x.cantidad > 0);
+  }, [contenidos]);
+
+  const contPorMes = useMemo(() => {
+    const acc = {};
+    MESES_ORD.forEach((m) => { acc[m] = { mes: m, cantidad: 0 }; });
+    for (const c of contenidos) {
+      if (!c.fecha) continue;
+      const mesIdx = parseInt(c.fecha.slice(5, 7)) - 1;
+      if (mesIdx >= 0 && mesIdx < 12) acc[MESES_ORD[mesIdx]].cantidad += 1;
+    }
+    return MESES_ORD.map((m) => acc[m]).filter((x) => x.cantidad > 0);
+  }, [contenidos]);
+
+  const sinDatos = presupuesto.length === 0 && contenidos.length === 0;
+  if (sinDatos) {
+    return (
+      <div className="text-center text-slate-400 py-16 bg-white rounded-xl border border-dashed border-slate-200">
+        <TrendingUp size={32} className="mx-auto mb-3 text-slate-300" />
+        Todavía no hay datos para mostrar. Cargá el presupuesto y algunos contenidos, y acá vas a ver las estadísticas del área.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* KPIs combinados */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <KpiCard icon={DollarSign} label="Inversión ejecutada" value={fmt(totalEjec)} accent={BRAND.turquesa} />
+        <KpiCard icon={TrendingUp} label="% de ejecución" value={pctEjec.toFixed(0) + "%"} accent={BRAND.marea} />
+        <KpiCard icon={Calendar} label="Contenidos totales" value={totalCont} accent="#7c3aed" />
+        <KpiCard icon={CheckCircle2} label="Publicados" value={publicados} accent={BRAND.verdeOk} />
+      </div>
+
+      {/* Sección Inversión */}
+      <div>
+        <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+          <Wallet size={15} /> Inversión
+        </h3>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="bg-white rounded-xl border border-slate-200 p-6">
+            <h4 className="font-semibold text-slate-800 mb-1">Gasto ejecutado por mes</h4>
+            <p className="text-sm text-slate-500 mb-5">Evolución de la inversión real</p>
+            {invPorMes.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={invPorMes} margin={{ left: 0, right: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="mes" stroke="#94a3b8" fontSize={12} />
+                  <YAxis stroke="#94a3b8" fontSize={11} tickFormatter={(v) => "$" + (v / 1e6).toFixed(0) + "M"} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }} formatter={(v) => fmt(v)} />
+                  <Bar dataKey="ejecutado" name="Ejecutado" fill={BRAND.turquesa} radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <p className="text-sm text-slate-400 py-12 text-center">Importá el presupuesto para ver este gráfico.</p>}
+          </div>
+          <div className="bg-white rounded-xl border border-slate-200 p-6">
+            <h4 className="font-semibold text-slate-800 mb-1">Top categorías por inversión</h4>
+            <p className="text-sm text-slate-500 mb-5">Dónde se concentra el gasto</p>
+            {topCategorias.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <BarChart data={topCategorias} layout="vertical" margin={{ left: 20, right: 16 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                  <XAxis type="number" stroke="#94a3b8" fontSize={11} tickFormatter={(v) => "$" + (v / 1e6).toFixed(0) + "M"} />
+                  <YAxis type="category" dataKey="categoria" stroke="#94a3b8" fontSize={10} width={110}
+                    tickFormatter={(v) => v.length > 16 ? v.slice(0, 14) + "…" : v} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }} formatter={(v) => fmt(v)} cursor={{ fill: "#f8fafc" }} />
+                  <Bar dataKey="ejecutado" name="Ejecutado" radius={[0, 6, 6, 0]}>
+                    {topCategorias.map((c, i) => <Cell key={i} fill={c.color} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <p className="text-sm text-slate-400 py-12 text-center">Importá el presupuesto para ver este gráfico.</p>}
+          </div>
+        </div>
+      </div>
+
+      {/* Sección Contenidos */}
+      <div>
+        <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+          <Calendar size={15} /> Contenidos
+        </h3>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Por red (torta) */}
+          <div className="bg-white rounded-xl border border-slate-200 p-6">
+            <h4 className="font-semibold text-slate-800 mb-1">Por red</h4>
+            <p className="text-sm text-slate-500 mb-3">Distribución de piezas</p>
+            {contPorRed.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <PieChart>
+                  <Pie data={contPorRed} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={75} innerRadius={42}>
+                    {contPorRed.map((r, i) => <Cell key={i} fill={r.color} />)}
+                  </Pie>
+                  <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : <p className="text-sm text-slate-400 py-12 text-center">Cargá contenidos para ver este gráfico.</p>}
+          </div>
+          {/* Por estado */}
+          <div className="bg-white rounded-xl border border-slate-200 p-6">
+            <h4 className="font-semibold text-slate-800 mb-1">Por estado</h4>
+            <p className="text-sm text-slate-500 mb-3">En qué etapa están</p>
+            {contPorEstado.length > 0 ? (
+              <div className="space-y-3 mt-5">
+                {contPorEstado.map((e) => {
+                  const max = Math.max(...contPorEstado.map((x) => x.cantidad), 1);
+                  return (
+                    <div key={e.estado}>
+                      <div className="flex items-center justify-between text-sm mb-1">
+                        <span className="text-slate-600">{e.estado}</span>
+                        <span className="font-semibold text-slate-800">{e.cantidad}</span>
+                      </div>
+                      <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: (e.cantidad / max * 100) + "%", background: e.color }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : <p className="text-sm text-slate-400 py-12 text-center">Cargá contenidos para ver esto.</p>}
+          </div>
+          {/* Por mes */}
+          <div className="bg-white rounded-xl border border-slate-200 p-6">
+            <h4 className="font-semibold text-slate-800 mb-1">Producción por mes</h4>
+            <p className="text-sm text-slate-500 mb-3">Piezas publicadas/planificadas</p>
+            {contPorMes.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={contPorMes} margin={{ left: -10, right: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="mes" stroke="#94a3b8" fontSize={11} />
+                  <YAxis stroke="#94a3b8" fontSize={11} allowDecimals={false} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 12 }} cursor={{ fill: "#f8fafc" }} />
+                  <Bar dataKey="cantidad" name="Contenidos" fill="#7c3aed" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <p className="text-sm text-slate-400 py-12 text-center">Cargá contenidos para ver esto.</p>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════
 // VISTA: Marketing (contenedor con pestañas)
 // ═════════════════════════════════════════════════════════════
 function Marketing(props) {
   const [tab, setTab] = useState("presupuesto");
   const tabs = [
     { key: "presupuesto", label: "Presupuesto", icon: Wallet },
+    { key: "estadisticas", label: "Estadísticas", icon: TrendingUp },
     { key: "calendario", label: "Calendario de contenidos", icon: Calendar },
     { key: "equipo", label: "Equipo de marketing", icon: Users },
   ];
@@ -1844,6 +2034,7 @@ function Marketing(props) {
         })}
       </div>
       {tab === "presupuesto" && <MarketingPresupuesto presupuesto={props.presupuesto} importarPresupuesto={props.importarPresupuesto} limpiarPresupuesto={props.limpiarPresupuesto} />}
+      {tab === "estadisticas" && <EstadisticasMkt presupuesto={props.presupuesto} contenidos={props.contenidos} />}
       {tab === "calendario" && <CalendarioContenidos contenidos={props.contenidos} equipoMkt={props.equipoMkt} addContenido={props.addContenido} updateContenido={props.updateContenido} deleteContenido={props.deleteContenido} />}
       {tab === "equipo" && <EquipoMarketing equipoMkt={props.equipoMkt} addMiembroMkt={props.addMiembroMkt} updateMiembroMkt={props.updateMiembroMkt} deleteMiembroMkt={props.deleteMiembroMkt} />}
     </div>
