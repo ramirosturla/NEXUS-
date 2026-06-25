@@ -18,10 +18,11 @@ import {
   totalFacturado, geoDeCiudad, resumenPorZona, PRODUCTOS_INICIALES,
   CONDICIONES_PAGO, precioAgencia, parseRankingWorkbook,
   CATEGORIAS_MKT, colorCategoria, parsePresupuestoWorkbook,
+  CANALES_CONTENIDO, TIPOS_CONTENIDO, ESTADOS_CONTENIDO, canalContenido, estadoContenido,
 } from "./data";
 import * as XLSX from "xlsx";
 import { supabaseHabilitado } from "./supabaseClient";
-import { cargarDatos, guardarAgencias, guardarProductos, signIn, signOut, getSession, onAuthChange, fetchEquipo, guardarEquipo, fetchPresupuesto, guardarPresupuesto } from "./storage";
+import { cargarDatos, guardarAgencias, guardarProductos, signIn, signOut, getSession, onAuthChange, fetchEquipo, guardarEquipo, fetchPresupuesto, guardarPresupuesto, fetchContenidos, guardarContenidos, fetchEquipoMkt, guardarEquipoMkt } from "./storage";
 
 // ═════════════════════════════════════════════════════════════
 // Logo de Sturla recreado en SVG (timón + texto)
@@ -1482,7 +1483,374 @@ function Pipeline({ agencias, updateAgencia }) {
 // ═════════════════════════════════════════════════════════════
 // VISTA: Marketing — Presupuesto
 // ═════════════════════════════════════════════════════════════
-function Marketing({ presupuesto, importarPresupuesto, limpiarPresupuesto }) {
+// ═════════════════════════════════════════════════════════════
+// Calendario de contenidos
+// ═════════════════════════════════════════════════════════════
+const MESES_LARGOS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+const DIAS_SEMANA = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
+
+function CalendarioContenidos({ contenidos, equipoMkt, addContenido, updateContenido, deleteContenido }) {
+  const hoy = new Date();
+  const [mes, setMes] = useState(hoy.getMonth());
+  const [anio, setAnio] = useState(hoy.getFullYear());
+  const [vista, setVista] = useState("calendario"); // calendario | lista
+  const [editando, setEditando] = useState(null); // contenido o {fecha} para nuevo
+  const [filtroCanal, setFiltroCanal] = useState("todos");
+
+  const items = filtroCanal === "todos" ? contenidos : contenidos.filter((c) => c.canal === filtroCanal);
+
+  // Construir grilla del mes
+  const primerDia = new Date(anio, mes, 1);
+  const offset = (primerDia.getDay() + 6) % 7; // lunes=0
+  const diasEnMes = new Date(anio, mes + 1, 0).getDate();
+  const celdas = [];
+  for (let i = 0; i < offset; i++) celdas.push(null);
+  for (let d = 1; d <= diasEnMes; d++) celdas.push(d);
+
+  const fechaStr = (d) => `${anio}-${String(mes + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+  const delDia = (d) => items.filter((c) => c.fecha === fechaStr(d));
+
+  const cambiarMes = (delta) => {
+    let m = mes + delta, a = anio;
+    if (m < 0) { m = 11; a--; } if (m > 11) { m = 0; a++; }
+    setMes(m); setAnio(a);
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Barra superior */}
+      <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
+            <button onClick={() => cambiarMes(-1)} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50"><ArrowLeft size={15} /></button>
+            <button onClick={() => cambiarMes(1)} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500 hover:bg-slate-50"><ArrowRight size={15} /></button>
+          </div>
+          <h3 className="font-bold text-slate-800 text-lg">{MESES_LARGOS[mes]} {anio}</h3>
+          <button onClick={() => { setMes(hoy.getMonth()); setAnio(hoy.getFullYear()); }}
+            className="text-xs font-medium text-cyan-700 hover:text-cyan-800">Hoy</button>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5">
+            <button onClick={() => setVista("calendario")} className="text-xs font-medium px-2.5 py-1 rounded-md transition-colors" style={vista === "calendario" ? { background: "#fff", color: BRAND.abismo } : { color: "#64748b" }}>Mes</button>
+            <button onClick={() => setVista("lista")} className="text-xs font-medium px-2.5 py-1 rounded-md transition-colors" style={vista === "lista" ? { background: "#fff", color: BRAND.abismo } : { color: "#64748b" }}>Lista</button>
+          </div>
+          <button onClick={() => setEditando({ fecha: fechaStr(hoy.getDate()) })}
+            className="inline-flex items-center gap-1.5 text-white text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90"
+            style={{ background: BRAND.abismo }}>
+            <Plus size={15} /> Nuevo contenido
+          </button>
+        </div>
+      </div>
+
+      {/* Filtro de canales */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <button onClick={() => setFiltroCanal("todos")}
+          className="text-xs font-medium px-2.5 py-1 rounded-full border transition-colors"
+          style={filtroCanal === "todos" ? { background: BRAND.abismo, color: "#fff", borderColor: BRAND.abismo } : { background: "#fff", color: "#64748b", borderColor: "#e2e8f0" }}>
+          Todos
+        </button>
+        {CANALES_CONTENIDO.map((c) => (
+          <button key={c.key} onClick={() => setFiltroCanal(c.key)}
+            className="text-xs font-medium px-2.5 py-1 rounded-full border transition-colors flex items-center gap-1.5"
+            style={filtroCanal === c.key ? { background: c.color + "18", color: c.color, borderColor: c.color } : { background: "#fff", color: "#64748b", borderColor: "#e2e8f0" }}>
+            <span className="w-2 h-2 rounded-full" style={{ background: c.color }} /> {c.label}
+          </button>
+        ))}
+      </div>
+
+      {vista === "calendario" ? (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          {/* Cabecera días */}
+          <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50/70">
+            {DIAS_SEMANA.map((d) => (
+              <div key={d} className="px-2 py-2.5 text-xs font-semibold text-slate-500 text-center">{d}</div>
+            ))}
+          </div>
+          {/* Celdas */}
+          <div className="grid grid-cols-7">
+            {celdas.map((d, i) => {
+              const esHoy = d === hoy.getDate() && mes === hoy.getMonth() && anio === hoy.getFullYear();
+              const piezas = d ? delDia(d) : [];
+              return (
+                <div key={i} className="min-h-[104px] border-b border-r border-slate-100 p-1.5 last:border-r-0"
+                  style={{ background: d ? "#fff" : "#fafbfc" }}>
+                  {d && (
+                    <>
+                      <div className="flex items-center justify-between mb-1">
+                        <button onClick={() => setEditando({ fecha: fechaStr(d) })}
+                          className="text-xs font-semibold w-6 h-6 rounded-full flex items-center justify-center hover:bg-slate-100 transition-colors"
+                          style={esHoy ? { background: BRAND.turquesa, color: "#fff" } : { color: "#94a3b8" }}>
+                          {d}
+                        </button>
+                      </div>
+                      <div className="space-y-1">
+                        {piezas.slice(0, 3).map((c) => {
+                          const ca = canalContenido(c.canal);
+                          const es = estadoContenido(c.estado);
+                          return (
+                            <button key={c.id} onClick={() => setEditando(c)}
+                              className="w-full text-left rounded px-1.5 py-1 text-[11px] leading-tight truncate hover:opacity-80 transition-opacity"
+                              style={{ background: ca.color + "15", borderLeft: `2px solid ${ca.color}` }}
+                              title={`${c.titulo} · ${es.label}`}>
+                              <span className="font-medium text-slate-700">{c.titulo}</span>
+                            </button>
+                          );
+                        })}
+                        {piezas.length > 3 && (
+                          <p className="text-[10px] text-slate-400 px-1.5">+{piezas.length - 3} más</p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        /* Vista lista */
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          {items.length === 0 && (
+            <div className="px-6 py-10 text-center text-slate-400 text-sm">No hay contenidos. Creá el primero con "Nuevo contenido".</div>
+          )}
+          <div className="divide-y divide-slate-100">
+            {[...items].sort((a, b) => (a.fecha || "").localeCompare(b.fecha || "")).map((c) => {
+              const ca = canalContenido(c.canal);
+              const es = estadoContenido(c.estado);
+              return (
+                <button key={c.id} onClick={() => setEditando(c)} className="w-full flex items-center gap-4 px-6 py-3.5 hover:bg-slate-50/50 text-left">
+                  <span className="w-1 h-10 rounded-full shrink-0" style={{ background: ca.color }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-slate-800 truncate">{c.titulo}</p>
+                    <p className="text-xs text-slate-400">{c.fecha} · {c.tipo} · {ca.label}</p>
+                  </div>
+                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full shrink-0" style={{ color: es.color, background: es.bg }}>{es.label}</span>
+                  {c.responsable && <span className="hidden sm:flex"><Avatar name={c.responsable} size={26} /></span>}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {editando && (
+        <ContenidoForm contenido={editando.id ? editando : null} fechaInicial={editando.fecha}
+          equipoMkt={equipoMkt}
+          onClose={() => setEditando(null)}
+          onSave={(data) => { editando.id ? updateContenido(editando.id, data) : addContenido(data); setEditando(null); }}
+          onDelete={editando.id ? () => { deleteContenido(editando.id); setEditando(null); } : null} />
+      )}
+    </div>
+  );
+}
+
+function ContenidoForm({ contenido, fechaInicial, equipoMkt, onClose, onSave, onDelete }) {
+  const [form, setForm] = useState({
+    titulo: contenido?.titulo || "",
+    descripcion: contenido?.descripcion || "",
+    fecha: contenido?.fecha || fechaInicial || "",
+    canal: contenido?.canal || "instagram",
+    tipo: contenido?.tipo || "Post",
+    estado: contenido?.estado || "idea",
+    responsable: contenido?.responsable || "",
+    url: contenido?.url || "",
+  });
+  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const nombres = (equipoMkt || []).filter((m) => m.activo).map((m) => m.nombre);
+
+  const submit = () => {
+    if (!form.titulo.trim() || !form.fecha) return;
+    onSave(form);
+  };
+
+  return (
+    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+          <h3 className="font-semibold text-slate-800">{contenido ? "Editar contenido" : "Nuevo contenido"}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+        </div>
+        <div className="p-6 space-y-4 overflow-y-auto">
+          <Field label="Título">
+            <input value={form.titulo} onChange={set("titulo")} autoFocus placeholder="Ej: Reel paseo al atardecer en el Delta"
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
+          </Field>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Fecha de publicación">
+              <input type="date" value={form.fecha} onChange={set("fecha")}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
+            </Field>
+            <Field label="Canal / red">
+              <select value={form.canal} onChange={set("canal")}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+                {CANALES_CONTENIDO.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+              </select>
+            </Field>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Field label="Tipo de contenido">
+              <select value={form.tipo} onChange={set("tipo")}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+                {TIPOS_CONTENIDO.map((t) => <option key={t}>{t}</option>)}
+              </select>
+            </Field>
+            <Field label="Responsable">
+              <select value={form.responsable} onChange={set("responsable")}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+                <option value="">Sin asignar</option>
+                {nombres.length === 0 && form.responsable === "" && <option value="" disabled>Agregá gente en "Equipo de marketing"</option>}
+                {nombres.map((n) => <option key={n}>{n}</option>)}
+              </select>
+            </Field>
+          </div>
+          <Field label="Estado">
+            <div className="flex gap-1.5 flex-wrap">
+              {ESTADOS_CONTENIDO.map((e) => (
+                <button key={e.key} onClick={() => setForm({ ...form, estado: e.key })}
+                  className="text-xs font-medium px-3 py-1.5 rounded-full border transition-colors"
+                  style={form.estado === e.key ? { background: e.bg, color: e.color, borderColor: e.color } : { background: "#fff", color: "#94a3b8", borderColor: "#e2e8f0" }}>
+                  {e.label}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Field label="Notas / descripción">
+            <textarea value={form.descripcion} onChange={set("descripcion")} rows={2} placeholder="Idea, copy, referencias..."
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 resize-none" />
+          </Field>
+          <Field label="URL de publicación (opcional)">
+            <input value={form.url} onChange={set("url")} placeholder="https://..."
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
+          </Field>
+        </div>
+        <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
+          {onDelete && (
+            <button onClick={onDelete} className="text-sm font-medium text-rose-600 border border-rose-200 rounded-lg px-4 py-2 hover:bg-rose-50">
+              Eliminar
+            </button>
+          )}
+          <button onClick={onClose} className="flex-1 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg py-2 hover:bg-slate-50">Cancelar</button>
+          <button onClick={submit} className="flex-1 text-sm font-medium text-white rounded-lg py-2 hover:opacity-90" style={{ background: BRAND.abismo }}>Guardar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════
+// Equipo de marketing
+// ═════════════════════════════════════════════════════════════
+function EquipoMarketing({ equipoMkt, addMiembroMkt, updateMiembroMkt, deleteMiembroMkt }) {
+  const [showForm, setShowForm] = useState(false);
+  const [nombre, setNombre] = useState("");
+  const [rol, setRol] = useState("Contenidos");
+
+  const crear = () => {
+    if (!nombre.trim()) return;
+    addMiembroMkt(nombre, rol);
+    setNombre(""); setRol("Contenidos"); setShowForm(false);
+  };
+
+  const ROLES = ["Contenidos", "Community Manager", "Diseño", "Audiovisual", "Líder de Marketing"];
+
+  return (
+    <div className="max-w-2xl">
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-slate-800">Equipo de marketing</h3>
+            <p className="text-sm text-slate-500 mt-0.5">Quiénes producen el contenido</p>
+          </div>
+          <button onClick={() => setShowForm(true)}
+            className="inline-flex items-center gap-1.5 text-white text-sm font-medium px-3 py-2 rounded-lg hover:opacity-90 shrink-0"
+            style={{ background: BRAND.abismo }}>
+            <Plus size={15} /> Agregar
+          </button>
+        </div>
+
+        {showForm && (
+          <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex flex-col sm:flex-row gap-3 sm:items-end">
+            <div className="flex-1">
+              <span className="text-xs font-medium text-slate-500 mb-1.5 block">Nombre</span>
+              <input value={nombre} onChange={(e) => setNombre(e.target.value)} autoFocus
+                onKeyDown={(e) => e.key === "Enter" && crear()} placeholder="Nombre y apellido"
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
+            </div>
+            <div className="w-full sm:w-48">
+              <span className="text-xs font-medium text-slate-500 mb-1.5 block">Rol</span>
+              <select value={rol} onChange={(e) => setRol(e.target.value)}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+                {ROLES.map((r) => <option key={r}>{r}</option>)}
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => { setShowForm(false); setNombre(""); }} className="text-sm font-medium text-slate-600 border border-slate-200 rounded-lg px-4 py-2 hover:bg-white">Cancelar</button>
+              <button onClick={crear} className="text-sm font-medium text-white rounded-lg px-4 py-2 hover:opacity-90" style={{ background: BRAND.verdeOk }}>Agregar</button>
+            </div>
+          </div>
+        )}
+
+        <div className="divide-y divide-slate-100">
+          {equipoMkt.length === 0 && (
+            <div className="px-6 py-10 text-center text-slate-400 text-sm">No hay miembros. Agregá el primero con el botón de arriba.</div>
+          )}
+          {equipoMkt.map((m) => (
+            <div key={m.id} className="flex items-center justify-between px-6 py-4 gap-3" style={{ opacity: m.activo ? 1 : 0.55 }}>
+              <div className="flex items-center gap-3 min-w-0">
+                <Avatar name={m.nombre} size={40} />
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-800 truncate">{m.nombre}</p>
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full" style={{ color: BRAND.marea, background: BRAND.espuma }}>{m.rol}</span>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button onClick={() => updateMiembroMkt(m.id, { activo: !m.activo })}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${m.activo ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
+                  {m.activo ? "Activo" : "Inactivo"}
+                </button>
+                <button onClick={() => deleteMiembroMkt(m.id)} title="Eliminar"
+                  className="w-8 h-8 rounded-lg hover:bg-rose-50 flex items-center justify-center text-slate-400 hover:text-rose-600"><Trash2 size={15} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════
+// VISTA: Marketing (contenedor con pestañas)
+// ═════════════════════════════════════════════════════════════
+function Marketing(props) {
+  const [tab, setTab] = useState("presupuesto");
+  const tabs = [
+    { key: "presupuesto", label: "Presupuesto", icon: Wallet },
+    { key: "calendario", label: "Calendario de contenidos", icon: Calendar },
+    { key: "equipo", label: "Equipo de marketing", icon: Users },
+  ];
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 w-fit">
+        {tabs.map((t) => {
+          const active = tab === t.key;
+          return (
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className="inline-flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              style={active ? { background: BRAND.abismo, color: "#fff" } : { color: "#64748b" }}>
+              <t.icon size={16} /> {t.label}
+            </button>
+          );
+        })}
+      </div>
+      {tab === "presupuesto" && <MarketingPresupuesto presupuesto={props.presupuesto} importarPresupuesto={props.importarPresupuesto} limpiarPresupuesto={props.limpiarPresupuesto} />}
+      {tab === "calendario" && <CalendarioContenidos contenidos={props.contenidos} equipoMkt={props.equipoMkt} addContenido={props.addContenido} updateContenido={props.updateContenido} deleteContenido={props.deleteContenido} />}
+      {tab === "equipo" && <EquipoMarketing equipoMkt={props.equipoMkt} addMiembroMkt={props.addMiembroMkt} updateMiembroMkt={props.updateMiembroMkt} deleteMiembroMkt={props.deleteMiembroMkt} />}
+    </div>
+  );
+}
+
+function MarketingPresupuesto({ presupuesto, importarPresupuesto, limpiarPresupuesto }) {
   const [importando, setImportando] = useState(false);
   const [error, setError] = useState("");
   const [mesFiltro, setMesFiltro] = useState("Todos");
@@ -1912,6 +2280,8 @@ export default function App() {
   const [productos, setProductos] = useState(PRODUCTOS_INICIALES);
   const [equipo, setEquipo] = useState([]);
   const [presupuesto, setPresupuesto] = useState([]);
+  const [contenidos, setContenidos] = useState([]);
+  const [equipoMkt, setEquipoMkt] = useState([]);
 
   // Estado de sincronización con la nube
   const [cargando, setCargando] = useState(supabaseHabilitado);
@@ -1935,6 +2305,11 @@ export default function App() {
         // Cargar presupuesto de marketing
         const pre = await fetchPresupuesto();
         if (activo) setPresupuesto(pre);
+        // Cargar contenidos y equipo de marketing
+        const cont = await fetchContenidos();
+        if (activo) setContenidos(cont);
+        const eqm = await fetchEquipoMkt();
+        if (activo) setEquipoMkt(eqm);
       } catch (e) {
         console.error("Error cargando de Supabase:", e);
         if (activo) setSyncEstado("error");
@@ -2000,6 +2375,24 @@ export default function App() {
     }, 800);
     return () => clearTimeout(t);
   }, [presupuesto, cargando]);
+
+  // Guardar contenidos automáticamente
+  useEffect(() => {
+    if (!supabaseHabilitado || cargando) return;
+    const t = setTimeout(async () => {
+      try { await guardarContenidos(contenidos); } catch (e) { console.error("Error guardando contenidos:", e); }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [contenidos, cargando]);
+
+  // Guardar equipo de marketing automáticamente
+  useEffect(() => {
+    if (!supabaseHabilitado || cargando) return;
+    const t = setTimeout(async () => {
+      try { await guardarEquipoMkt(equipoMkt); } catch (e) { console.error("Error guardando equipo mkt:", e); }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [equipoMkt, cargando]);
 
   if (verificandoSesion) {
     return (
@@ -2113,6 +2506,16 @@ export default function App() {
   const importarPresupuesto = (items) => setPresupuesto(items);
   const limpiarPresupuesto = () => setPresupuesto([]);
 
+  // Contenidos
+  const addContenido = (data) => setContenidos([{ ...data, id: `cont-${Date.now()}` }, ...contenidos]);
+  const updateContenido = (id, cambios) => setContenidos(contenidos.map((c) => c.id === id ? { ...c, ...cambios } : c));
+  const deleteContenido = (id) => setContenidos(contenidos.filter((c) => c.id !== id));
+
+  // Equipo de marketing
+  const addMiembroMkt = (nombre, rol) => setEquipoMkt([...equipoMkt, { id: `mkt-${Date.now()}`, nombre: nombre.trim(), rol, activo: true }]);
+  const updateMiembroMkt = (id, cambios) => setEquipoMkt(equipoMkt.map((m) => m.id === id ? { ...m, ...cambios } : m));
+  const deleteMiembroMkt = (id) => setEquipoMkt(equipoMkt.filter((m) => m.id !== id));
+
   const titulos = {
     dashboard: { t: "Dashboard del canal", s: "Visión general de agencias y pasajeros" },
     agencias: { t: "Gestión de agencias", s: "Detalle, histórico, precios y reservas" },
@@ -2185,7 +2588,7 @@ export default function App() {
           {vista === "productos" && <Productos productos={productos} setProductos={setProductos} />}
           {vista === "mapa" && <MapaZonas agencias={agencias} />}
           {vista === "pipeline" && <Pipeline agencias={agencias} updateAgencia={updateAgencia} />}
-          {vista === "marketing" && <Marketing presupuesto={presupuesto} importarPresupuesto={importarPresupuesto} limpiarPresupuesto={limpiarPresupuesto} />}
+          {vista === "marketing" && <Marketing presupuesto={presupuesto} importarPresupuesto={importarPresupuesto} limpiarPresupuesto={limpiarPresupuesto} contenidos={contenidos} equipoMkt={equipoMkt} addContenido={addContenido} updateContenido={updateContenido} deleteContenido={deleteContenido} addMiembroMkt={addMiembroMkt} updateMiembroMkt={updateMiembroMkt} deleteMiembroMkt={deleteMiembroMkt} />}
           {vista === "distribucion" && <Distribucion agencias={agencias} equipo={equipo} addMiembro={addMiembro} updateMiembro={updateMiembro} deleteMiembro={deleteMiembro} />}
         </div>
       </main>
