@@ -441,3 +441,32 @@ export const parsePresupuestoWorkbook = (wb, XLSX) => {
   }
   return { hoja, items, total: items.length };
 };
+
+// ─────────────────────────────────────────────────────────────
+// CALENDARIO DE CONTENIDOS
+// ─────────────────────────────────────────────────────────────
+
+// Canales / redes donde se publica
+export const CANALES_CONTENIDO = [
+  { key: "instagram", label: "Instagram", color: "#E1306C" },
+  { key: "facebook",  label: "Facebook",  color: "#1877F2" },
+  { key: "tiktok",    label: "TikTok",    color: "#000000" },
+  { key: "web",       label: "Web",       color: "#0891b2" },
+  { key: "email",     label: "Email",     color: "#f59e0b" },
+  { key: "whatsapp",  label: "WhatsApp",  color: "#25D366" },
+];
+
+// Tipos de pieza de contenido
+export const TIPOS_CONTENIDO = ["Reel", "Historia", "Post", "Video", "Foto", "Blog", "Landing", "Email", "Nota de prensa"];
+
+// Estados del flujo de contenido (con aprobación)
+export const ESTADOS_CONTENIDO = [
+  { key: "idea",       label: "Idea",       color: "#64748b", bg: "#f1f5f9" },
+  { key: "produccion", label: "Producción", color: "#0891b2", bg: "#cffafe" },
+  { key: "revision",   label: "Revisión",   color: "#f59e0b", bg: "#fef3c7" },
+  { key: "aprobado",   label: "Aprobado",   color: "#7c3aed", bg: "#f3e8ff" },
+  { key: "publicado",  label: "Publicado",  color: "#16a34a", bg: "#dcfce7" },
+];
+
+export const canalContenido = (key) => CANALES_CONTENIDO.find((c) => c.key === key) || CANALES_CONTENIDO[0];
+export const estadoContenido = (key) => ESTADOS_CONTENIDO.find((e) => e.key === key) || ESTADOS_CONTENIDO[0];
