@@ -3119,6 +3119,7 @@ export default function App() {
     pipeline: { t: "Captación de agencias", s: "Tus agencias organizadas por etapa de captación" },
     marketing: { t: "Marketing y Comunicación", s: "Presupuesto, inversión y ejecución del área" },
     distribucion: { t: "Equipo de cuentas", s: "Asignación y carga por ejecutivo" },
+    usuarios: { t: "Usuarios y permisos", s: "Gestión de accesos y roles del sistema" },
   };
 
   return (
@@ -3172,8 +3173,8 @@ export default function App() {
           <div style={{ height: 3, background: `linear-gradient(90deg, ${BRAND.abismo} 0%, ${BRAND.marea} 40%, ${BRAND.turquesa} 100%)` }} />
           <div className="px-8 py-5 flex items-start justify-between">
             <div>
-              <h1 className="text-xl font-bold text-slate-800 tracking-tight">{titulos[vista].t}</h1>
-              <p className="text-sm text-slate-500 mt-0.5">{titulos[vista].s}</p>
+              <h1 className="text-xl font-bold text-slate-800 tracking-tight">{(titulos[vista] || { t: "", s: "" }).t}</h1>
+              <p className="text-sm text-slate-500 mt-0.5">{(titulos[vista] || { t: "", s: "" }).s}</p>
             </div>
             <SyncBadge habilitado={supabaseHabilitado} estado={syncEstado} />
           </div>
