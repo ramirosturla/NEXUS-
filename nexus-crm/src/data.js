@@ -576,3 +576,27 @@ export const esKpiContenido = (nombre) => {
     return n === nk || n.includes(nk) || nk.includes(n);
   });
 };
+
+// ─────────────────────────────────────────────────────────────
+// CALENDARIO DEL DEPARTAMENTO (actividades + cuentas)
+// ─────────────────────────────────────────────────────────────
+
+// Tipos de actividad del departamento (no solo contenido)
+export const TIPOS_ACTIVIDAD = [
+  { key: "contenido", label: "Contenido", color: "#16a3b8", icon: "image" },
+  { key: "campania",  label: "Campaña",   color: "#7c3aed", icon: "megaphone" },
+  { key: "email",     label: "Email",     color: "#f59e0b", icon: "mail" },
+  { key: "reunion",   label: "Reunión",   color: "#0891b2", icon: "users" },
+  { key: "evento",    label: "Evento",    color: "#e11d48", icon: "calendar" },
+  { key: "tarea",     label: "Tarea",     color: "#64748b", icon: "check" },
+];
+
+// Cuentas de Instagram / marca
+export const CUENTAS = [
+  { key: "sturla",      label: "Sturla Viajes",     color: "#0f3d63" },
+  { key: "catamaranes", label: "Catamaranes Tigre", color: "#16a3b8" },
+  { key: "eventos",     label: "Eventos Sturla",    color: "#f59e0b" },
+];
+
+export const tipoActividad = (key) => TIPOS_ACTIVIDAD.find((t) => t.key === key) || TIPOS_ACTIVIDAD[0];
+export const cuentaInfo = (key) => CUENTAS.find((c) => c.key === key) || null;
