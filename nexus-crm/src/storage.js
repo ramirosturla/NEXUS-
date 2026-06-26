@@ -254,6 +254,8 @@ const contenidoToDB = (c) => ({
   estado: c.estado || "idea",
   responsable: c.responsable || null,
   url: c.url || null,
+  actividad: c.actividad || "contenido",
+  cuenta: c.cuenta || null,
 });
 const contenidoFromDB = (r) => ({
   id: r.id,
@@ -265,6 +267,8 @@ const contenidoFromDB = (r) => ({
   estado: r.estado || "idea",
   responsable: r.responsable || "",
   url: r.url || "",
+  actividad: r.actividad || "contenido",
+  cuenta: r.cuenta || "",
 });
 
 export async function fetchContenidos() {
