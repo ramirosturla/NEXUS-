@@ -71,8 +71,9 @@ function Logo({ size = 36, light = false }) {
 // Auxiliares
 // ═════════════════════════════════════════════════════════════
 function Avatar({ name, size = 28 }) {
-  const initials = name.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-  const hue = (name.charCodeAt(0) * 11 + name.length * 7) % 360;
+  const safe = (name && String(name).trim()) || "?";
+  const initials = safe.split(" ").map((w) => w[0] || "").join("").slice(0, 2).toUpperCase() || "?";
+  const hue = (safe.charCodeAt(0) * 11 + safe.length * 7) % 360;
   return (
     <div className="rounded-full flex items-center justify-center font-semibold text-white shrink-0"
       style={{ width: size, height: size, fontSize: size * 0.38, background: `hsl(${hue}, 45%, 45%)` }}>
@@ -2660,13 +2661,18 @@ function Usuarios({ miPerfil }) {
   const [perfiles, setPerfiles] = useState([]);
   const [cargando, setCargando] = useState(true);
   const [guardando, setGuardando] = useState(null);
+  const [errorCarga, setErrorCarga] = useState("");
 
   const cargar = async () => {
     setCargando(true);
+    setErrorCarga("");
     try {
       const data = await fetchPerfiles();
-      setPerfiles(data);
-    } catch (e) { console.error(e); }
+      setPerfiles(Array.isArray(data) ? data : []);
+    } catch (e) {
+      console.error("Error cargando perfiles:", e);
+      setErrorCarga(e?.message || "No se pudieron cargar los usuarios.");
+    }
     setCargando(false);
   };
   useEffect(() => { cargar(); }, []);
@@ -2688,7 +2694,21 @@ function Usuarios({ miPerfil }) {
     return <div className="text-center text-slate-400 py-16"><Loader2 size={28} className="animate-spin mx-auto mb-3" />Cargando usuarios...</div>;
   }
 
-  const pendientes = perfiles.filter((p) => p.rol === "pendiente");
+  if (errorCarga) {
+    return (
+      <div className="max-w-md mx-auto text-center py-16">
+        <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-rose-50">
+          <AlertTriangle size={26} className="text-rose-500" />
+        </div>
+        <h3 className="font-semibold text-slate-700">No se pudieron cargar los usuarios</h3>
+        <p className="text-sm text-slate-500 mt-1">{errorCarga}</p>
+        <p className="text-xs text-slate-400 mt-3">Probá recargar la página. Si persiste, puede faltar la tabla "perfiles" en Supabase.</p>
+        <button onClick={cargar} className="mt-4 text-sm font-medium text-white rounded-lg px-5 py-2" style={{ background: BRAND.abismo }}>Reintentar</button>
+      </div>
+    );
+  }
+
+  const pendientes = (perfiles || []).filter((p) => p.rol === "pendiente");
 
   return (
     <div className="space-y-6">
