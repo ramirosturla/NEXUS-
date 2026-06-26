@@ -308,3 +308,42 @@ export async function guardarEquipoMkt(miembros) {
     await supabase.from("equipo_mkt").delete().neq("id", "___nunca___");
   }
 }
+
+// ─────────────────────────────────────────────────────────────
+// KPIs DE MARKETING (importados de la hoja INPUT_KPIs)
+// ─────────────────────────────────────────────────────────────
+const kpiToDB = (k) => ({
+  id: k.id,
+  bloque: k.bloque || null,
+  kpi: k.kpi,
+  meta: k.meta || null,
+  meses: k.meses || {},
+  promedio: k.promedio ?? null,
+});
+const kpiFromDB = (r) => ({
+  id: r.id,
+  bloque: r.bloque || "General",
+  kpi: r.kpi,
+  meta: r.meta || "",
+  meses: r.meses || {},
+  promedio: r.promedio != null ? Number(r.promedio) : null,
+});
+
+export async function fetchKpis() {
+  if (!supabaseHabilitado) return [];
+  const { data, error } = await supabase.from("kpis_mkt").select("*");
+  if (error) throw error;
+  return (data || []).map(kpiFromDB);
+}
+
+export async function guardarKpis(items) {
+  if (!supabaseHabilitado) return;
+  const ids = items.map((i) => i.id);
+  if (items.length) {
+    const { error } = await supabase.from("kpis_mkt").upsert(items.map(kpiToDB));
+    if (error) throw error;
+    await supabase.from("kpis_mkt").delete().not("id", "in", `(${ids.map((x) => `"${x}"`).join(",")})`);
+  } else {
+    await supabase.from("kpis_mkt").delete().neq("id", "___nunca___");
+  }
+}
