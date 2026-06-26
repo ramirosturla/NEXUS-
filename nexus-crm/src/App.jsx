@@ -21,6 +21,7 @@ import {
   CANALES_CONTENIDO, TIPOS_CONTENIDO, ESTADOS_CONTENIDO, canalContenido, estadoContenido,
   parseKpisWorkbook, colorBloque,
   KPIS_CONTENIDO, esKpiContenido, normalizarKpi,
+  TIPOS_ACTIVIDAD, CUENTAS, tipoActividad, cuentaInfo,
 } from "./data";
 import * as XLSX from "xlsx";
 import { supabaseHabilitado } from "./supabaseClient";
@@ -1498,8 +1499,12 @@ function CalendarioContenidos({ contenidos, equipoMkt, addContenido, updateConte
   const [vista, setVista] = useState("calendario"); // calendario | lista
   const [editando, setEditando] = useState(null); // contenido o {fecha} para nuevo
   const [filtroCanal, setFiltroCanal] = useState("todos");
+  const [filtroCuenta, setFiltroCuenta] = useState("todas");
 
-  const items = filtroCanal === "todos" ? contenidos : contenidos.filter((c) => c.canal === filtroCanal);
+  const items = contenidos.filter((c) =>
+    (filtroCanal === "todos" || c.canal === filtroCanal) &&
+    (filtroCuenta === "todas" || (c.cuenta || "sturla") === filtroCuenta)
+  );
 
   // Construir grilla del mes
   const primerDia = new Date(anio, mes, 1);
@@ -1539,7 +1544,7 @@ function CalendarioContenidos({ contenidos, equipoMkt, addContenido, updateConte
           <button onClick={() => setEditando({ fecha: fechaStr(hoy.getDate()) })}
             className="inline-flex items-center gap-1.5 text-white text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90"
             style={{ background: BRAND.abismo }}>
-            <Plus size={15} /> Nuevo contenido
+            <Plus size={15} /> Nueva actividad
           </button>
         </div>
       </div>
@@ -1555,6 +1560,23 @@ function CalendarioContenidos({ contenidos, equipoMkt, addContenido, updateConte
           <button key={c.key} onClick={() => setFiltroCanal(c.key)}
             className="text-xs font-medium px-2.5 py-1 rounded-full border transition-colors flex items-center gap-1.5"
             style={filtroCanal === c.key ? { background: c.color + "18", color: c.color, borderColor: c.color } : { background: "#fff", color: "#64748b", borderColor: "#e2e8f0" }}>
+            <span className="w-2 h-2 rounded-full" style={{ background: c.color }} /> {c.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Filtro de cuentas */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        <span className="text-xs text-slate-400 mr-1">Cuenta:</span>
+        <button onClick={() => setFiltroCuenta("todas")}
+          className="text-xs font-medium px-2.5 py-1 rounded-full border transition-colors"
+          style={filtroCuenta === "todas" ? { background: BRAND.abismo, color: "#fff", borderColor: BRAND.abismo } : { background: "#fff", color: "#64748b", borderColor: "#e2e8f0" }}>
+          Todas
+        </button>
+        {CUENTAS.map((c) => (
+          <button key={c.key} onClick={() => setFiltroCuenta(c.key)}
+            className="text-xs font-medium px-2.5 py-1 rounded-full border transition-colors flex items-center gap-1.5"
+            style={filtroCuenta === c.key ? { background: c.color + "18", color: c.color, borderColor: c.color } : { background: "#fff", color: "#64748b", borderColor: "#e2e8f0" }}>
             <span className="w-2 h-2 rounded-full" style={{ background: c.color }} /> {c.label}
           </button>
         ))}
@@ -1613,18 +1635,25 @@ function CalendarioContenidos({ contenidos, equipoMkt, addContenido, updateConte
         /* Vista lista */
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           {items.length === 0 && (
-            <div className="px-6 py-10 text-center text-slate-400 text-sm">No hay contenidos. Creá el primero con "Nuevo contenido".</div>
+            <div className="px-6 py-10 text-center text-slate-400 text-sm">No hay actividades. Creá la primera con "Nueva actividad".</div>
           )}
           <div className="divide-y divide-slate-100">
             {[...items].sort((a, b) => (a.fecha || "").localeCompare(b.fecha || "")).map((c) => {
               const ca = canalContenido(c.canal);
               const es = estadoContenido(c.estado);
+              const act = tipoActividad(c.actividad);
+              const cta = cuentaInfo(c.cuenta);
               return (
                 <button key={c.id} onClick={() => setEditando(c)} className="w-full flex items-center gap-4 px-6 py-3.5 hover:bg-slate-50/50 text-left">
                   <span className="w-1 h-10 rounded-full shrink-0" style={{ background: ca.color }} />
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-slate-800 truncate">{c.titulo}</p>
-                    <p className="text-xs text-slate-400">{c.fecha} · {c.tipo} · {ca.label}</p>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0" style={{ background: act.color + "18", color: act.color }}>{act.label}</span>
+                      <p className="font-medium text-slate-800 truncate">{c.titulo}</p>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {c.fecha} · {ca.label}{c.tipo ? ` · ${c.tipo}` : ""}{cta ? ` · ${cta.label}` : ""}
+                    </p>
                   </div>
                   <span className="text-xs font-semibold px-2.5 py-1 rounded-full shrink-0" style={{ color: es.color, background: es.bg }}>{es.label}</span>
                   {c.responsable && <span className="hidden sm:flex"><Avatar name={c.responsable} size={26} /></span>}
@@ -1656,6 +1685,8 @@ function ContenidoForm({ contenido, fechaInicial, equipoMkt, onClose, onSave, on
     estado: contenido?.estado || "idea",
     responsable: contenido?.responsable || "",
     url: contenido?.url || "",
+    actividad: contenido?.actividad || "contenido",
+    cuenta: contenido?.cuenta || "sturla",
   });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const nombres = (equipoMkt || []).filter((m) => m.activo).map((m) => m.nombre);
@@ -1669,16 +1700,28 @@ function ContenidoForm({ contenido, fechaInicial, equipoMkt, onClose, onSave, on
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl max-h-[92vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
-          <h3 className="font-semibold text-slate-800">{contenido ? "Editar contenido" : "Nuevo contenido"}</h3>
+          <h3 className="font-semibold text-slate-800">{contenido ? "Editar actividad" : "Nueva actividad"}</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
         </div>
         <div className="p-6 space-y-4 overflow-y-auto">
+          {/* Tipo de actividad */}
+          <Field label="Tipo de actividad">
+            <div className="flex gap-1.5 flex-wrap">
+              {TIPOS_ACTIVIDAD.map((t) => (
+                <button key={t.key} onClick={() => setForm({ ...form, actividad: t.key })}
+                  className="text-xs font-medium px-3 py-1.5 rounded-full border transition-colors"
+                  style={form.actividad === t.key ? { background: t.color + "18", color: t.color, borderColor: t.color } : { background: "#fff", color: "#94a3b8", borderColor: "#e2e8f0" }}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </Field>
           <Field label="Título">
             <input value={form.titulo} onChange={set("titulo")} autoFocus placeholder="Ej: Reel paseo al atardecer en el Delta"
               className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
           </Field>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Fecha de publicación">
+            <Field label="Fecha">
               <input type="date" value={form.fecha} onChange={set("fecha")}
                 className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
             </Field>
@@ -1690,21 +1733,27 @@ function ContenidoForm({ contenido, fechaInicial, equipoMkt, onClose, onSave, on
             </Field>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Tipo de contenido">
+            <Field label="Cuenta">
+              <select value={form.cuenta} onChange={set("cuenta")}
+                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+                {CUENTAS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+              </select>
+            </Field>
+            <Field label="Tipo de pieza">
               <select value={form.tipo} onChange={set("tipo")}
                 className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
                 {TIPOS_CONTENIDO.map((t) => <option key={t}>{t}</option>)}
               </select>
             </Field>
-            <Field label="Responsable">
-              <select value={form.responsable} onChange={set("responsable")}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
-                <option value="">Sin asignar</option>
-                {nombres.length === 0 && form.responsable === "" && <option value="" disabled>Agregá gente en "Equipo de marketing"</option>}
-                {nombres.map((n) => <option key={n}>{n}</option>)}
-              </select>
-            </Field>
           </div>
+          <Field label="Responsable">
+            <select value={form.responsable} onChange={set("responsable")}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+              <option value="">Sin asignar</option>
+              {nombres.length === 0 && form.responsable === "" && <option value="" disabled>Agregá gente en "Equipo de marketing"</option>}
+              {nombres.map((n) => <option key={n}>{n}</option>)}
+            </select>
+          </Field>
           <Field label="Estado">
             <div className="flex gap-1.5 flex-wrap">
               {ESTADOS_CONTENIDO.map((e) => (
@@ -2137,7 +2186,7 @@ function Marketing(props) {
     { key: "presupuesto", label: "Presupuesto", icon: Wallet },
     { key: "estadisticas", label: "Estadísticas", icon: TrendingUp },
     { key: "kpis", label: "KPIs de contenido", icon: BarChart3 },
-    { key: "calendario", label: "Calendario de contenidos", icon: Calendar },
+    { key: "calendario", label: "Calendario", icon: Calendar },
     { key: "equipo", label: "Equipo de marketing", icon: Users },
   ];
   return (
