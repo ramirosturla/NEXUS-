@@ -540,3 +540,39 @@ export const colorBloque = (b) => {
   const hit = Object.keys(COLOR_BLOQUE).find((k) => b.includes(k) || k.includes(b));
   return hit ? COLOR_BLOQUE[hit] : "#0f3d63";
 };
+
+// Los 19 KPIs de contenido y pauta que se muestran (RRSS Orgánico + Meta Ads)
+export const KPIS_CONTENIDO = [
+  "Cuentas alcanzadas",
+  "Visualizaciones totales",
+  "Interacciones totales",
+  "Engagement Rate ER (%)",
+  "Seguidores nuevos en el mes",
+  "Seguidores totales acumulados",
+  "Piezas de contenido producidas",
+  "ER mejor contenido (%)",
+  "Guardar / Saves",
+  "Compartidos (shares)",
+  "Clics en link bio",
+  "Mensajes / Leads recibidos por paid",
+  "Costo por lead",
+  "Inversión total pauta ($)",
+  "Alcance pauta (personas)",
+  "Impresiones pauta",
+  "CTR pauta (%)",
+  "CPM",
+  "CPC",
+];
+
+// Compara nombres de KPI de forma flexible (ignora mayúsculas, espacios, paréntesis)
+export const normalizarKpi = (s) =>
+  String(s || "").toLowerCase().replace(/[()%$\/]/g, "").replace(/\s+/g, " ").trim();
+
+// ¿Este KPI está en la lista de los 19?
+export const esKpiContenido = (nombre) => {
+  const n = normalizarKpi(nombre);
+  return KPIS_CONTENIDO.some((k) => {
+    const nk = normalizarKpi(k);
+    return n === nk || n.includes(nk) || nk.includes(n);
+  });
+};
