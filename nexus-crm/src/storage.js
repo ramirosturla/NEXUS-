@@ -116,10 +116,10 @@ export async function guardarAgencias(agencias) {
   const { error } = await supabase.from("agencias").upsert(agencias.map(agenciaToDB));
   if (error) throw error;
   // Borrar los que ya no existen (si hay alguno en la nube fuera de esta lista)
+  // PROTECCIÓN ANTI-BORRADO: si la lista está vacía, NO borramos nada
+  // (evita que una carga fallida pise todos los datos con una lista vacía).
   if (ids.length) {
     await supabase.from("agencias").delete().not("id", "in", `(${ids.join(",")})`);
-  } else {
-    await supabase.from("agencias").delete().neq("id", -1);
   }
 }
 
@@ -193,8 +193,6 @@ export async function guardarEquipo(miembros) {
   // Borrar los que ya no están
   if (ids.length) {
     await supabase.from("equipo").delete().not("id", "in", `(${ids.join(",")})`);
-  } else {
-    await supabase.from("equipo").delete().neq("id", -1);
   }
 }
 
@@ -236,8 +234,6 @@ export async function guardarPresupuesto(items) {
     const { error } = await supabase.from("presupuesto").upsert(items.map(presupuestoToDB));
     if (error) throw error;
     await supabase.from("presupuesto").delete().not("id", "in", `(${ids.map((x) => `"${x}"`).join(",")})`);
-  } else {
-    await supabase.from("presupuesto").delete().neq("id", "___nunca___");
   }
 }
 
@@ -285,8 +281,6 @@ export async function guardarContenidos(items) {
     const { error } = await supabase.from("contenidos").upsert(items.map(contenidoToDB));
     if (error) throw error;
     await supabase.from("contenidos").delete().not("id", "in", `(${ids.map((x) => `"${x}"`).join(",")})`);
-  } else {
-    await supabase.from("contenidos").delete().neq("id", "___nunca___");
   }
 }
 
@@ -308,8 +302,6 @@ export async function guardarEquipoMkt(miembros) {
     const { error } = await supabase.from("equipo_mkt").upsert(rows);
     if (error) throw error;
     await supabase.from("equipo_mkt").delete().not("id", "in", `(${ids.map((x) => `"${x}"`).join(",")})`);
-  } else {
-    await supabase.from("equipo_mkt").delete().neq("id", "___nunca___");
   }
 }
 
@@ -347,8 +339,6 @@ export async function guardarKpis(items) {
     const { error } = await supabase.from("kpis_mkt").upsert(items.map(kpiToDB));
     if (error) throw error;
     await supabase.from("kpis_mkt").delete().not("id", "in", `(${ids.map((x) => `"${x}"`).join(",")})`);
-  } else {
-    await supabase.from("kpis_mkt").delete().neq("id", "___nunca___");
   }
 }
 
