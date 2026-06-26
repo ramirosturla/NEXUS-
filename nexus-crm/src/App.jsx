@@ -2847,6 +2847,7 @@ export default function App() {
 
   // Estado de sincronización con la nube
   const [cargando, setCargando] = useState(supabaseHabilitado);
+  const [cargaFallo, setCargaFallo] = useState(false);
   const [syncEstado, setSyncEstado] = useState("idle"); // idle | guardando | guardado | error
   const primeraCarga = useRef(true);
 
@@ -2877,6 +2878,7 @@ export default function App() {
       } catch (e) {
         console.error("Error cargando de Supabase:", e);
         if (activo) setSyncEstado("error");
+        if (activo) setCargaFallo(true);
       } finally {
         if (activo) { setCargando(false); }
       }
@@ -2886,7 +2888,7 @@ export default function App() {
 
   // Guardar agencias automáticamente cuando cambian (con debounce)
   useEffect(() => {
-    if (!supabaseHabilitado || cargando) return;
+    if (!supabaseHabilitado || cargando || cargaFallo) return;
     setSyncEstado("guardando");
     const t = setTimeout(async () => {
       try {
@@ -2903,7 +2905,7 @@ export default function App() {
 
   // Guardar productos automáticamente cuando cambian (con debounce)
   useEffect(() => {
-    if (!supabaseHabilitado || cargando) return;
+    if (!supabaseHabilitado || cargando || cargaFallo) return;
     const t = setTimeout(async () => {
       try {
         await guardarProductos(productos);
@@ -2916,7 +2918,7 @@ export default function App() {
 
   // Guardar equipo automáticamente cuando cambia (con debounce)
   useEffect(() => {
-    if (!supabaseHabilitado || cargando) return;
+    if (!supabaseHabilitado || cargando || cargaFallo) return;
     const t = setTimeout(async () => {
       try {
         await guardarEquipo(equipo);
@@ -2929,7 +2931,7 @@ export default function App() {
 
   // Guardar presupuesto automáticamente cuando cambia (con debounce)
   useEffect(() => {
-    if (!supabaseHabilitado || cargando) return;
+    if (!supabaseHabilitado || cargando || cargaFallo) return;
     const t = setTimeout(async () => {
       try {
         await guardarPresupuesto(presupuesto);
@@ -2942,7 +2944,7 @@ export default function App() {
 
   // Guardar contenidos automáticamente
   useEffect(() => {
-    if (!supabaseHabilitado || cargando) return;
+    if (!supabaseHabilitado || cargando || cargaFallo) return;
     const t = setTimeout(async () => {
       try { await guardarContenidos(contenidos); } catch (e) { console.error("Error guardando contenidos:", e); }
     }, 800);
@@ -2951,7 +2953,7 @@ export default function App() {
 
   // Guardar equipo de marketing automáticamente
   useEffect(() => {
-    if (!supabaseHabilitado || cargando) return;
+    if (!supabaseHabilitado || cargando || cargaFallo) return;
     const t = setTimeout(async () => {
       try { await guardarEquipoMkt(equipoMkt); } catch (e) { console.error("Error guardando equipo mkt:", e); }
     }, 800);
@@ -2959,7 +2961,7 @@ export default function App() {
   }, [equipoMkt, cargando]);
 
   useEffect(() => {
-    if (!supabaseHabilitado || cargando) return;
+    if (!supabaseHabilitado || cargando || cargaFallo) return;
     const t = setTimeout(async () => {
       try { await guardarKpis(kpis); } catch (e) { console.error("Error guardando KPIs:", e); }
     }, 800);
