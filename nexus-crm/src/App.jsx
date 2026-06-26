@@ -20,6 +20,7 @@ import {
   CATEGORIAS_MKT, colorCategoria, parsePresupuestoWorkbook,
   CANALES_CONTENIDO, TIPOS_CONTENIDO, ESTADOS_CONTENIDO, canalContenido, estadoContenido,
   parseKpisWorkbook, colorBloque,
+  KPIS_CONTENIDO, esKpiContenido, normalizarKpi,
 } from "./data";
 import * as XLSX from "xlsx";
 import { supabaseHabilitado } from "./supabaseClient";
@@ -2017,34 +2018,40 @@ function EstadisticasMkt({ presupuesto, contenidos }) {
 // ═════════════════════════════════════════════════════════════
 function KpisContenido({ kpis, limpiarKpis }) {
   const MESES_ORD = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
-  const [bloqueSel, setBloqueSel] = useState("Todos");
+  const [mesSel, setMesSel] = useState("Promedio");
 
-  // Formatea un número de KPI (maneja porcentajes y miles)
-  const fmtKpi = (v, kpiNombre) => {
+  // Solo los 19 KPIs de contenido y pauta, en el orden de la lista
+  const kpisFiltrados = useMemo(() => {
+    const incluidos = kpis.filter((k) => esKpiContenido(k.kpi));
+    // Ordenar según el orden de KPIS_CONTENIDO
+    return incluidos.sort((a, b) => {
+      const ia = KPIS_CONTENIDO.findIndex((x) => normalizarKpi(x) === normalizarKpi(a.kpi) || normalizarKpi(a.kpi).includes(normalizarKpi(x)));
+      const ib = KPIS_CONTENIDO.findIndex((x) => normalizarKpi(x) === normalizarKpi(b.kpi) || normalizarKpi(b.kpi).includes(normalizarKpi(x)));
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
+  }, [kpis]);
+
+  // Meses que tienen al menos un dato
+  const mesesConDatos = useMemo(() => {
+    const conDatos = MESES_ORD.filter((m) => kpisFiltrados.some((k) => k.meses[m] != null));
+    return ["Promedio", ...conDatos];
+  }, [kpisFiltrados]);
+
+  // Formatea un valor de KPI (porcentajes, miles, decimales)
+  const fmtKpi = (v, nombre) => {
     if (v == null) return "—";
-    const esPct = /%|rate|tasa|ctr|er\b|engagement|apertura|rebote|orgánico/i.test(kpiNombre);
-    if (esPct && v < 2) return (v * 100).toFixed(1) + "%";
+    const esPct = /%|rate|tasa|ctr|\ber\b|engagement/i.test(nombre);
+    if (esPct && Math.abs(v) < 2) return (v * 100).toFixed(1) + "%";
+    if (/costo|cpm|cpc|cph|lead|\$/i.test(nombre) && Math.abs(v) < 1000) return "$" + (Math.round(v * 100) / 100).toLocaleString("es-AR");
     if (Math.abs(v) >= 1000) return Math.round(v).toLocaleString("es-AR");
     return (Math.round(v * 100) / 100).toLocaleString("es-AR");
   };
 
-  const bloques = useMemo(() => {
-    const set = [];
-    kpis.forEach((k) => { if (!set.includes(k.bloque)) set.push(k.bloque); });
-    return set;
-  }, [kpis]);
-
-  const visibles = bloqueSel === "Todos" ? kpis : kpis.filter((k) => k.bloque === bloqueSel);
-
-  // Agrupar por bloque para mostrar en secciones
-  const porBloque = useMemo(() => {
-    const acc = {};
-    for (const k of visibles) {
-      if (!acc[k.bloque]) acc[k.bloque] = [];
-      acc[k.bloque].push(k);
-    }
-    return acc;
-  }, [visibles]);
+  // Valor a mostrar según el mes elegido (o promedio)
+  const valorDe = (k) => {
+    if (mesSel === "Promedio") return k.promedio;
+    return k.meses[mesSel];
+  };
 
   if (kpis.length === 0) {
     return (
@@ -2056,18 +2063,31 @@ function KpisContenido({ kpis, limpiarKpis }) {
     );
   }
 
+  if (kpisFiltrados.length === 0) {
+    return (
+      <div className="text-center text-slate-400 py-16 bg-white rounded-xl border border-dashed border-slate-200">
+        <BarChart3 size={32} className="mx-auto mb-3 text-slate-300" />
+        <p className="font-medium text-slate-600">No se encontraron los KPIs de contenido en el archivo</p>
+        <p className="text-sm mt-1">Revisá que la hoja INPUT_KPIs tenga los indicadores de RRSS y pauta.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
-      {/* Filtro por bloque */}
+      {/* Selector de mes (como en Presupuesto) */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5 flex-wrap">
-          {["Todos", ...bloques].map((b) => (
-            <button key={b} onClick={() => setBloqueSel(b)}
-              className="text-xs font-medium px-2.5 py-1 rounded-md transition-colors"
-              style={bloqueSel === b ? { background: "#fff", color: BRAND.abismo, boxShadow: "0 1px 2px rgba(0,0,0,0.06)" } : { color: "#64748b" }}>
-              {b}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-slate-500">Período:</span>
+          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5 flex-wrap">
+            {mesesConDatos.map((m) => (
+              <button key={m} onClick={() => setMesSel(m)}
+                className="text-xs font-medium px-2.5 py-1 rounded-md transition-colors"
+                style={mesSel === m ? { background: "#fff", color: BRAND.abismo, boxShadow: "0 1px 2px rgba(0,0,0,0.06)" } : { color: "#64748b" }}>
+                {m === "Promedio" ? "Promedio" : m}
+              </button>
+            ))}
+          </div>
         </div>
         <button onClick={limpiarKpis} title="Borrar KPIs"
           className="w-9 h-9 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-rose-600 hover:border-rose-200">
@@ -2075,40 +2095,35 @@ function KpisContenido({ kpis, limpiarKpis }) {
         </button>
       </div>
 
-      {/* Secciones por bloque */}
-      {Object.entries(porBloque).map(([bloque, lista]) => (
-        <div key={bloque}>
-          <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full" style={{ background: colorBloque(bloque) }} />
-            {bloque}
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-            {lista.map((k) => {
-              const serie = MESES_ORD.map((m) => ({ mes: m, valor: k.meses[m] })).filter((x) => x.valor != null);
-              const color = colorBloque(bloque);
-              return (
-                <div key={k.id} className="bg-white rounded-xl border border-slate-200 p-5">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <p className="text-sm font-medium text-slate-700 leading-tight">{k.kpi}</p>
-                    {k.meta && <span className="text-[10px] text-slate-400 whitespace-nowrap shrink-0 bg-slate-50 px-1.5 py-0.5 rounded">{k.meta}</span>}
-                  </div>
-                  <p className="text-2xl font-bold text-slate-800">{fmtKpi(k.promedio, k.kpi)}</p>
-                  <p className="text-xs text-slate-400 mb-3">promedio del período</p>
-                  {serie.length > 1 && (
-                    <ResponsiveContainer width="100%" height={50}>
-                      <LineChart data={serie} margin={{ top: 4, bottom: 4, left: 0, right: 0 }}>
-                        <Line type="monotone" dataKey="valor" stroke={color} strokeWidth={2} dot={false} />
-                        <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 11 }}
-                          formatter={(v) => fmtKpi(v, k.kpi)} labelStyle={{ display: "none" }} />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+      {/* Grilla de los 19 KPIs */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {kpisFiltrados.map((k) => {
+          const serie = MESES_ORD.map((m) => ({ mes: m, valor: k.meses[m] })).filter((x) => x.valor != null);
+          const color = colorBloque(k.bloque);
+          const valor = valorDe(k);
+          return (
+            <div key={k.id} className="bg-white rounded-xl border border-slate-200 p-5">
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <p className="text-sm font-medium text-slate-700 leading-tight">{k.kpi}</p>
+                {k.meta && <span className="text-[10px] text-slate-400 whitespace-nowrap shrink-0 bg-slate-50 px-1.5 py-0.5 rounded">{k.meta}</span>}
+              </div>
+              <p className="text-2xl font-bold text-slate-800">{fmtKpi(valor, k.kpi)}</p>
+              <p className="text-xs text-slate-400 mb-3">
+                {mesSel === "Promedio" ? "promedio del período" : `valor de ${mesSel}`}
+              </p>
+              {serie.length > 1 && (
+                <ResponsiveContainer width="100%" height={50}>
+                  <LineChart data={serie} margin={{ top: 4, bottom: 4, left: 0, right: 0 }}>
+                    <Line type="monotone" dataKey="valor" stroke={color} strokeWidth={2} dot={false} />
+                    <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 11 }}
+                      formatter={(v) => fmtKpi(v, k.kpi)} labelFormatter={(l) => l} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
