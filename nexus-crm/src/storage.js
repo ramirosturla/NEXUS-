@@ -351,3 +351,54 @@ export async function guardarKpis(items) {
     await supabase.from("kpis_mkt").delete().neq("id", "___nunca___");
   }
 }
+
+// ─────────────────────────────────────────────────────────────
+// PERFILES Y PERMISOS DE USUARIOS
+// ─────────────────────────────────────────────────────────────
+
+// Registro de un nuevo usuario (email + contraseña)
+export async function signUp(email, password) {
+  if (!supabaseHabilitado) throw new Error("Supabase no está configurado");
+  const { data, error } = await supabase.auth.signUp({
+    email: email.trim(),
+    password,
+  });
+  if (error) throw error;
+  return data.user;
+}
+
+// Obtener (o crear) el perfil del usuario actual
+export async function fetchMiPerfil(user) {
+  if (!supabaseHabilitado || !user) return null;
+  // Buscar perfil existente
+  const { data, error } = await supabase.from("perfiles").select("*").eq("id", user.id).maybeSingle();
+  if (error) { console.error("Error buscando perfil:", error); }
+  if (data) {
+    return { id: data.id, email: data.email, rol: data.rol || "pendiente", puedeEditar: data.puede_editar === true };
+  }
+  // No existe: crearlo como pendiente
+  const nuevo = { id: user.id, email: user.email, rol: "pendiente", puede_editar: false };
+  const { error: errIns } = await supabase.from("perfiles").insert(nuevo);
+  if (errIns) console.error("Error creando perfil:", errIns);
+  return { id: user.id, email: user.email, rol: "pendiente", puedeEditar: false };
+}
+
+// Listar todos los perfiles (para el admin)
+export async function fetchPerfiles() {
+  if (!supabaseHabilitado) return [];
+  const { data, error } = await supabase.from("perfiles").select("*").order("creado_en");
+  if (error) throw error;
+  return (data || []).map((r) => ({
+    id: r.id, email: r.email, rol: r.rol || "pendiente", puedeEditar: r.puede_editar === true,
+  }));
+}
+
+// Actualizar el rol y/o permiso de edición de un perfil
+export async function actualizarPerfil(id, cambios) {
+  if (!supabaseHabilitado) return;
+  const row = {};
+  if (cambios.rol !== undefined) row.rol = cambios.rol;
+  if (cambios.puedeEditar !== undefined) row.puede_editar = cambios.puedeEditar;
+  const { error } = await supabase.from("perfiles").update(row).eq("id", id);
+  if (error) throw error;
+}
