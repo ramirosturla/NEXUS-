@@ -22,10 +22,11 @@ import {
   parseKpisWorkbook, colorBloque,
   KPIS_CONTENIDO, esKpiContenido, normalizarKpi,
   TIPOS_ACTIVIDAD, CUENTAS, tipoActividad, cuentaInfo,
+  SECCIONES, ROLES, puedeVer, rolInfo,
 } from "./data";
 import * as XLSX from "xlsx";
 import { supabaseHabilitado } from "./supabaseClient";
-import { cargarDatos, guardarAgencias, guardarProductos, signIn, signOut, getSession, onAuthChange, fetchEquipo, guardarEquipo, fetchPresupuesto, guardarPresupuesto, fetchContenidos, guardarContenidos, fetchEquipoMkt, guardarEquipoMkt, fetchKpis, guardarKpis } from "./storage";
+import { cargarDatos, guardarAgencias, guardarProductos, signIn, signOut, getSession, onAuthChange, fetchEquipo, guardarEquipo, fetchPresupuesto, guardarPresupuesto, fetchContenidos, guardarContenidos, fetchEquipoMkt, guardarEquipoMkt, fetchKpis, guardarKpis, signUp, fetchMiPerfil, fetchPerfiles, actualizarPerfil } from "./storage";
 
 // ═════════════════════════════════════════════════════════════
 // Logo de Sturla recreado en SVG (timón + texto)
@@ -105,22 +106,32 @@ function Login({ onLogin }) {
   const [pass, setPass] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
+  const [modo, setModo] = useState("login"); // login | registro
+  const [exito, setExito] = useState("");
 
   const submit = async () => {
     if (!email.trim() || !pass) {
       setError("Completá tu email y contraseña.");
       return;
     }
-    setError("");
+    setError(""); setExito("");
     setCargando(true);
     try {
+      if (modo === "registro") {
+        if (pass.length < 6) { setError("La contraseña debe tener al menos 6 caracteres."); setCargando(false); return; }
+        await signUp(email, pass);
+        setExito("¡Cuenta creada! Ya podés iniciar sesión. Un administrador va a asignarte un rol para acceder.");
+        setModo("login"); setPass(""); setCargando(false);
+        return;
+      }
       const user = await signIn(email, pass);
       onLogin(user);
     } catch (e) {
       const msg = (e?.message || "").toLowerCase();
-      if (msg.includes("invalid")) setError("Email o contraseña incorrectos.");
+      if (msg.includes("already registered") || msg.includes("already been registered")) setError("Ese email ya está registrado. Probá iniciar sesión.");
+      else if (msg.includes("invalid")) setError("Email o contraseña incorrectos.");
       else if (msg.includes("email not confirmed")) setError("Tu email todavía no fue confirmado.");
-      else setError("No se pudo iniciar sesión. Revisá tu conexión e intentá de nuevo.");
+      else setError(modo === "registro" ? "No se pudo crear la cuenta. Intentá de nuevo." : "No se pudo iniciar sesión. Revisá tu conexión e intentá de nuevo.");
       setCargando(false);
     }
   };
@@ -160,9 +171,11 @@ function Login({ onLogin }) {
           </div>
 
           <div className="bg-white rounded-2xl shadow-xl border border-slate-100 p-8">
-            <h1 className="text-xl font-bold text-slate-800 tracking-tight">Acceso al equipo</h1>
+            <h1 className="text-xl font-bold text-slate-800 tracking-tight">{modo === "registro" ? "Crear cuenta" : "Acceso al equipo"}</h1>
             <p className="text-sm text-slate-500 mt-1 mb-6">
-              Ingresá con tu email y contraseña para gestionar el canal de agencias.
+              {modo === "registro"
+                ? "Registrate con tu email. Un administrador te asignará un rol para acceder."
+                : "Ingresá con tu email y contraseña para gestionar el canal de agencias."}
             </p>
 
             <div className="space-y-4">
@@ -183,7 +196,7 @@ function Login({ onLogin }) {
                   <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input value={pass} onChange={(e) => setPass(e.target.value)} type="password"
                     onKeyDown={(e) => e.key === "Enter" && submit()}
-                    placeholder="********"
+                    placeholder={modo === "registro" ? "Mínimo 6 caracteres" : "********"}
                     className="w-full pl-9 pr-3 py-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:border-transparent"
                     style={{ "--tw-ring-color": BRAND.turquesa }} />
                 </div>
@@ -192,12 +205,31 @@ function Login({ onLogin }) {
               {error && (
                 <div className="text-sm text-rose-600 bg-rose-50 rounded-lg px-3 py-2">{error}</div>
               )}
+              {exito && (
+                <div className="text-sm text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">{exito}</div>
+              )}
 
               <button onClick={submit} disabled={cargando}
                 className="w-full text-sm font-semibold text-white rounded-lg py-2.5 transition-opacity hover:opacity-90 disabled:opacity-60 flex items-center justify-center gap-2"
                 style={{ background: BRAND.abismo }}>
-                {cargando ? (<><Loader2 size={16} className="animate-spin" /> Ingresando...</>) : "Ingresar"}
+                {cargando
+                  ? (<><Loader2 size={16} className="animate-spin" /> {modo === "registro" ? "Creando..." : "Ingresando..."}</>)
+                  : (modo === "registro" ? "Crear cuenta" : "Ingresar")}
               </button>
+
+              <div className="text-center pt-1">
+                {modo === "login" ? (
+                  <button onClick={() => { setModo("registro"); setError(""); setExito(""); }}
+                    className="text-sm text-slate-500 hover:text-slate-700">
+                    ¿No tenés cuenta? <span className="font-semibold" style={{ color: BRAND.turquesa }}>Registrate</span>
+                  </button>
+                ) : (
+                  <button onClick={() => { setModo("login"); setError(""); setExito(""); }}
+                    className="text-sm text-slate-500 hover:text-slate-700">
+                    ¿Ya tenés cuenta? <span className="font-semibold" style={{ color: BRAND.turquesa }}>Iniciá sesión</span>
+                  </button>
+                )}
+              </div>
             </div>
           </div>
           <p className="text-center text-xs text-slate-400 mt-5">
@@ -2594,6 +2626,7 @@ const NAV = [
   { key: "pipeline", label: "Captación", icon: KanbanSquare },
   { key: "marketing", label: "Marketing", icon: Megaphone },
   { key: "distribucion", label: "Equipo", icon: Users },
+  { key: "usuarios", label: "Usuarios", icon: Lock },
 ];
 
 // Indicador de estado de sincronización con la nube
@@ -2620,8 +2653,123 @@ function SyncBadge({ habilitado, estado }) {
   );
 }
 
+// ═════════════════════════════════════════════════════════════
+// VISTA: Usuarios y permisos (solo admin)
+// ═════════════════════════════════════════════════════════════
+function Usuarios({ miPerfil }) {
+  const [perfiles, setPerfiles] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [guardando, setGuardando] = useState(null);
+
+  const cargar = async () => {
+    setCargando(true);
+    try {
+      const data = await fetchPerfiles();
+      setPerfiles(data);
+    } catch (e) { console.error(e); }
+    setCargando(false);
+  };
+  useEffect(() => { cargar(); }, []);
+
+  const cambiarRol = async (id, rol) => {
+    setGuardando(id);
+    setPerfiles((prev) => prev.map((p) => p.id === id ? { ...p, rol } : p));
+    try { await actualizarPerfil(id, { rol }); } catch (e) { console.error(e); }
+    setGuardando(null);
+  };
+  const cambiarEdicion = async (id, puedeEditar) => {
+    setGuardando(id);
+    setPerfiles((prev) => prev.map((p) => p.id === id ? { ...p, puedeEditar } : p));
+    try { await actualizarPerfil(id, { puedeEditar }); } catch (e) { console.error(e); }
+    setGuardando(null);
+  };
+
+  if (cargando) {
+    return <div className="text-center text-slate-400 py-16"><Loader2 size={28} className="animate-spin mx-auto mb-3" />Cargando usuarios...</div>;
+  }
+
+  const pendientes = perfiles.filter((p) => p.rol === "pendiente");
+
+  return (
+    <div className="space-y-6">
+      {pendientes.length > 0 && (
+        <div className="rounded-xl border p-4 flex items-start gap-3" style={{ background: "#fef3c7", borderColor: "#fcd34d" }}>
+          <AlertTriangle size={18} className="text-amber-600 shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-800">
+            Hay {pendientes.length} {pendientes.length === 1 ? "usuario nuevo esperando" : "usuarios nuevos esperando"} que les asignes un rol. Hasta entonces no pueden acceder al sistema.
+          </p>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="px-6 py-4 border-b border-slate-100">
+          <h3 className="font-semibold text-slate-800">Usuarios del sistema</h3>
+          <p className="text-sm text-slate-500 mt-0.5">Asigná a cada persona su rol y si puede editar o solo ver.</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 bg-slate-50/70 text-left text-slate-500">
+                <th className="px-6 py-3 font-medium">Usuario</th>
+                <th className="px-6 py-3 font-medium">Rol</th>
+                <th className="px-6 py-3 font-medium text-center">Permiso</th>
+              </tr>
+            </thead>
+            <tbody>
+              {perfiles.map((p) => {
+                const esYo = p.id === miPerfil?.id;
+                return (
+                  <tr key={p.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50/50">
+                    <td className="px-6 py-3">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={p.email || "?"} size={32} />
+                        <div>
+                          <p className="font-medium text-slate-800">{p.email}{esYo && <span className="text-xs text-slate-400 ml-2">(vos)</span>}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-3">
+                      <div className="flex gap-1.5 flex-wrap">
+                        {Object.keys(ROLES).filter((r) => r !== "pendiente").map((r) => {
+                          const info = ROLES[r];
+                          const activo = p.rol === r;
+                          return (
+                            <button key={r} onClick={() => cambiarRol(p.id, r)} disabled={esYo}
+                              className="text-xs font-medium px-2.5 py-1 rounded-full border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              style={activo ? { background: info.color + "18", color: info.color, borderColor: info.color } : { background: "#fff", color: "#94a3b8", borderColor: "#e2e8f0" }}>
+                              {info.label}
+                            </button>
+                          );
+                        })}
+                        {p.rol === "pendiente" && <span className="text-xs font-medium px-2.5 py-1 rounded-full" style={{ background: "#f1f5f9", color: "#94a3b8" }}>Pendiente</span>}
+                      </div>
+                    </td>
+                    <td className="px-6 py-3">
+                      <div className="flex justify-center">
+                        <button onClick={() => cambiarEdicion(p.id, !p.puedeEditar)} disabled={esYo || p.rol === "pendiente"}
+                          className="text-xs font-medium px-3 py-1.5 rounded-lg border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                          style={p.puedeEditar ? { background: "#dcfce7", color: "#16a34a", borderColor: "#16a34a" } : { background: "#fff", color: "#64748b", borderColor: "#e2e8f0" }}>
+                          {guardando === p.id ? "..." : p.puedeEditar ? "Puede editar" : "Solo lectura"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p className="text-xs text-slate-400">
+        Nota: el rol Admin siempre puede editar y gestionar usuarios. No podés cambiar tu propio rol para no quedar bloqueado.
+      </p>
+    </div>
+  );
+}
+
 export default function App() {
   const [usuario, setUsuario] = useState(null);
+  const [perfil, setPerfil] = useState(null);
   const [verificandoSesion, setVerificandoSesion] = useState(supabaseHabilitado);
 
   // Recuperar sesión activa al iniciar (si ya inició sesión antes)
@@ -2644,6 +2792,30 @@ export default function App() {
     });
     return () => { activo = false; data?.subscription?.unsubscribe?.(); };
   }, []);
+
+  // Cargar el perfil (rol y permisos) cuando hay usuario
+  useEffect(() => {
+    if (!usuario) { setPerfil(null); return; }
+    let activo = true;
+    (async () => {
+      try {
+        const p = await fetchMiPerfil(usuario);
+        if (activo) setPerfil(p);
+      } catch (e) {
+        console.error("Error cargando perfil:", e);
+      }
+    })();
+    return () => { activo = false; };
+  }, [usuario]);
+
+  // Si la vista actual no está permitida para el rol, saltar a la primera permitida
+  useEffect(() => {
+    if (!perfil || perfil.rol === "pendiente") return;
+    if (!puedeVer(perfil.rol, vista)) {
+      const primera = NAV.find((item) => puedeVer(perfil.rol, item.key));
+      if (primera) setVista(primera.key);
+    }
+  }, [perfil]);
   const [vista, setVista] = useState("dashboard");
   const [agencias, setAgencias] = useState([]);
   const [productos, setProductos] = useState(PRODUCTOS_INICIALES);
@@ -2785,6 +2957,27 @@ export default function App() {
 
   if (!usuario) return <Login onLogin={setUsuario} />;
 
+  // Usuario registrado pero sin rol asignado todavía
+  if (perfil && perfil.rol === "pendiente") {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6" style={{ background: "#f7fafc" }}>
+        <div className="max-w-md text-center bg-white rounded-2xl border border-slate-200 p-10 shadow-sm">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5" style={{ background: BRAND.espuma }}>
+            <Clock size={32} style={{ color: BRAND.turquesa }} />
+          </div>
+          <h2 className="text-lg font-bold text-slate-800">Tu cuenta está pendiente de aprobación</h2>
+          <p className="text-sm text-slate-500 mt-2">
+            Te registraste correctamente como <span className="font-medium">{usuario.email}</span>. Un administrador tiene que asignarte un rol antes de que puedas acceder. Volvé a entrar más tarde.
+          </p>
+          <button onClick={async () => { await signOut(); setUsuario(null); }}
+            className="mt-6 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg px-5 py-2 hover:bg-slate-50">
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (cargando) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: BRAND.abismo }}>
@@ -2917,7 +3110,7 @@ export default function App() {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {NAV.map((item) => {
+          {NAV.filter((item) => puedeVer(perfil?.rol || "pendiente", item.key)).map((item) => {
             const active = vista === item.key;
             return (
               <button key={item.key} onClick={() => setVista(item.key)}
@@ -2940,7 +3133,9 @@ export default function App() {
             <Avatar name={usuario.email || "Usuario"} size={36} />
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-slate-800 truncate">{usuario.email || "Usuario"}</p>
-              <p className="text-xs text-slate-400 truncate">Sesión activa</p>
+              <p className="text-xs truncate" style={{ color: rolInfo(perfil?.rol || "pendiente").color }}>
+                {rolInfo(perfil?.rol || "pendiente").label}
+              </p>
             </div>
           </div>
           <button onClick={async () => { await signOut(); setUsuario(null); }}
@@ -2965,13 +3160,26 @@ export default function App() {
         </header>
 
         <div className="p-8">
+          {!puedeVer(perfil?.rol || "pendiente", vista) ? (
+            <div className="max-w-md mx-auto text-center py-16">
+              <div className="w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-4 bg-slate-100">
+                <Lock size={26} className="text-slate-400" />
+              </div>
+              <h3 className="font-semibold text-slate-700">No tenés acceso a esta sección</h3>
+              <p className="text-sm text-slate-500 mt-1">Tu rol actual no incluye esta parte del sistema. Si creés que es un error, hablá con un administrador.</p>
+            </div>
+          ) : (
+          <>
           {vista === "dashboard" && <Dashboard agencias={agencias} />}
-          {vista === "agencias" && <Agencias agencias={agencias} addAgencia={addAgencia} addVisita={addVisita} deleteAgencia={deleteAgencia} productos={productos} setPreciosAgencia={setPreciosAgencia} importarAgencias={importarAgencias} addReserva={addReserva} updateReserva={updateReserva} deleteReserva={deleteReserva} updateAgencia={updateAgencia} nombresEquipo={nombresEquipo} />}
+          {vista === "agencias" && <Agencias agencias={agencias} addAgencia={addAgencia} addVisita={addVisita} deleteAgencia={deleteAgencia} productos={productos} setPreciosAgencia={setPreciosAgencia} importarAgencias={importarAgencias} addReserva={addReserva} updateReserva={updateReserva} deleteReserva={deleteReserva} updateAgencia={updateAgencia} nombresEquipo={nombresEquipo} soloLectura={!perfil?.puedeEditar} />}
           {vista === "productos" && <Productos productos={productos} setProductos={setProductos} />}
           {vista === "mapa" && <MapaZonas agencias={agencias} />}
           {vista === "pipeline" && <Pipeline agencias={agencias} updateAgencia={updateAgencia} />}
           {vista === "marketing" && <Marketing presupuesto={presupuesto} importarPresupuesto={importarPresupuesto} limpiarPresupuesto={limpiarPresupuesto} contenidos={contenidos} equipoMkt={equipoMkt} addContenido={addContenido} updateContenido={updateContenido} deleteContenido={deleteContenido} addMiembroMkt={addMiembroMkt} updateMiembroMkt={updateMiembroMkt} deleteMiembroMkt={deleteMiembroMkt} kpis={kpis} importarKpis={importarKpis} limpiarKpis={limpiarKpis} />}
           {vista === "distribucion" && <Distribucion agencias={agencias} equipo={equipo} addMiembro={addMiembro} updateMiembro={updateMiembro} deleteMiembro={deleteMiembro} />}
+          {vista === "usuarios" && <Usuarios miPerfil={perfil} />}
+          </>
+          )}
         </div>
       </main>
     </div>
