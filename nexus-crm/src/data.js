@@ -600,3 +600,52 @@ export const CUENTAS = [
 
 export const tipoActividad = (key) => TIPOS_ACTIVIDAD.find((t) => t.key === key) || TIPOS_ACTIVIDAD[0];
 export const cuentaInfo = (key) => CUENTAS.find((c) => c.key === key) || null;
+
+// ─────────────────────────────────────────────────────────────
+// ROLES Y PERMISOS
+// ─────────────────────────────────────────────────────────────
+
+// Secciones del sistema (deben coincidir con las keys de NAV en App.jsx)
+export const SECCIONES = [
+  { key: "dashboard",    label: "Dashboard" },
+  { key: "agencias",     label: "Agencias" },
+  { key: "productos",    label: "Productos" },
+  { key: "mapa",         label: "Mapa de zonas" },
+  { key: "pipeline",     label: "Captación" },
+  { key: "marketing",    label: "Marketing" },
+  { key: "distribucion", label: "Equipo" },
+  { key: "usuarios",     label: "Usuarios" },
+];
+
+// Qué secciones ve cada rol
+export const ROLES = {
+  admin: {
+    label: "Admin",
+    color: "#7c3aed",
+    secciones: ["dashboard","agencias","productos","mapa","pipeline","marketing","distribucion","usuarios"],
+  },
+  comercial: {
+    label: "Comercial",
+    color: "#0891b2",
+    secciones: ["dashboard","agencias","productos","mapa","pipeline","marketing","distribucion"],
+  },
+  marketing: {
+    label: "Marketing",
+    color: "#16a3b8",
+    secciones: ["marketing"],
+  },
+  pendiente: {
+    label: "Pendiente",
+    color: "#94a3b8",
+    secciones: [],
+  },
+};
+
+// ¿El rol puede ver esta sección?
+export const puedeVer = (rol, seccion) => {
+  const r = ROLES[rol] || ROLES.pendiente;
+  return r.secciones.includes(seccion);
+};
+
+// Info de un rol
+export const rolInfo = (rol) => ROLES[rol] || ROLES.pendiente;
