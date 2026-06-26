@@ -6,7 +6,7 @@ import {
   MapPin, Mail, Phone, CheckCircle2, Clock, XCircle, Filter, Zap,
   Map as MapIcon, NotebookPen, CalendarClock, Trash2, Tag,
   CreditCard, Upload, Package, Pencil, AlertTriangle, FileSpreadsheet,
-  Cloud, CloudOff, Loader2, Megaphone, Wallet, TrendingDown,
+  Cloud, CloudOff, Loader2, Megaphone, Wallet, TrendingDown, BarChart3,
 } from "lucide-react";
 import {
   BarChart, Bar, Cell, LineChart, Line, XAxis, YAxis, CartesianGrid,
@@ -19,10 +19,11 @@ import {
   CONDICIONES_PAGO, precioAgencia, parseRankingWorkbook,
   CATEGORIAS_MKT, colorCategoria, parsePresupuestoWorkbook,
   CANALES_CONTENIDO, TIPOS_CONTENIDO, ESTADOS_CONTENIDO, canalContenido, estadoContenido,
+  parseKpisWorkbook, colorBloque,
 } from "./data";
 import * as XLSX from "xlsx";
 import { supabaseHabilitado } from "./supabaseClient";
-import { cargarDatos, guardarAgencias, guardarProductos, signIn, signOut, getSession, onAuthChange, fetchEquipo, guardarEquipo, fetchPresupuesto, guardarPresupuesto, fetchContenidos, guardarContenidos, fetchEquipoMkt, guardarEquipoMkt } from "./storage";
+import { cargarDatos, guardarAgencias, guardarProductos, signIn, signOut, getSession, onAuthChange, fetchEquipo, guardarEquipo, fetchPresupuesto, guardarPresupuesto, fetchContenidos, guardarContenidos, fetchEquipoMkt, guardarEquipoMkt, fetchKpis, guardarKpis } from "./storage";
 
 // ═════════════════════════════════════════════════════════════
 // Logo de Sturla recreado en SVG (timón + texto)
@@ -2011,17 +2012,122 @@ function EstadisticasMkt({ presupuesto, contenidos }) {
 // ═════════════════════════════════════════════════════════════
 // VISTA: Marketing (contenedor con pestañas)
 // ═════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════
+// VISTA: KPIs de contenido (importados de la hoja INPUT_KPIs)
+// ═════════════════════════════════════════════════════════════
+function KpisContenido({ kpis, limpiarKpis }) {
+  const MESES_ORD = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const [bloqueSel, setBloqueSel] = useState("Todos");
+
+  // Formatea un número de KPI (maneja porcentajes y miles)
+  const fmtKpi = (v, kpiNombre) => {
+    if (v == null) return "—";
+    const esPct = /%|rate|tasa|ctr|er\b|engagement|apertura|rebote|orgánico/i.test(kpiNombre);
+    if (esPct && v < 2) return (v * 100).toFixed(1) + "%";
+    if (Math.abs(v) >= 1000) return Math.round(v).toLocaleString("es-AR");
+    return (Math.round(v * 100) / 100).toLocaleString("es-AR");
+  };
+
+  const bloques = useMemo(() => {
+    const set = [];
+    kpis.forEach((k) => { if (!set.includes(k.bloque)) set.push(k.bloque); });
+    return set;
+  }, [kpis]);
+
+  const visibles = bloqueSel === "Todos" ? kpis : kpis.filter((k) => k.bloque === bloqueSel);
+
+  // Agrupar por bloque para mostrar en secciones
+  const porBloque = useMemo(() => {
+    const acc = {};
+    for (const k of visibles) {
+      if (!acc[k.bloque]) acc[k.bloque] = [];
+      acc[k.bloque].push(k);
+    }
+    return acc;
+  }, [visibles]);
+
+  if (kpis.length === 0) {
+    return (
+      <div className="text-center text-slate-400 py-16 bg-white rounded-xl border border-dashed border-slate-200">
+        <BarChart3 size={32} className="mx-auto mb-3 text-slate-300" />
+        <p className="font-medium text-slate-600">No hay KPIs de contenido cargados</p>
+        <p className="text-sm mt-1">Importá el Excel desde la pestaña "Presupuesto" y los KPIs de la hoja INPUT_KPIs van a aparecer acá automáticamente.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-5">
+      {/* Filtro por bloque */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-0.5 flex-wrap">
+          {["Todos", ...bloques].map((b) => (
+            <button key={b} onClick={() => setBloqueSel(b)}
+              className="text-xs font-medium px-2.5 py-1 rounded-md transition-colors"
+              style={bloqueSel === b ? { background: "#fff", color: BRAND.abismo, boxShadow: "0 1px 2px rgba(0,0,0,0.06)" } : { color: "#64748b" }}>
+              {b}
+            </button>
+          ))}
+        </div>
+        <button onClick={limpiarKpis} title="Borrar KPIs"
+          className="w-9 h-9 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-rose-600 hover:border-rose-200">
+          <Trash2 size={16} />
+        </button>
+      </div>
+
+      {/* Secciones por bloque */}
+      {Object.entries(porBloque).map(([bloque, lista]) => (
+        <div key={bloque}>
+          <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ background: colorBloque(bloque) }} />
+            {bloque}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {lista.map((k) => {
+              const serie = MESES_ORD.map((m) => ({ mes: m, valor: k.meses[m] })).filter((x) => x.valor != null);
+              const color = colorBloque(bloque);
+              return (
+                <div key={k.id} className="bg-white rounded-xl border border-slate-200 p-5">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <p className="text-sm font-medium text-slate-700 leading-tight">{k.kpi}</p>
+                    {k.meta && <span className="text-[10px] text-slate-400 whitespace-nowrap shrink-0 bg-slate-50 px-1.5 py-0.5 rounded">{k.meta}</span>}
+                  </div>
+                  <p className="text-2xl font-bold text-slate-800">{fmtKpi(k.promedio, k.kpi)}</p>
+                  <p className="text-xs text-slate-400 mb-3">promedio del período</p>
+                  {serie.length > 1 && (
+                    <ResponsiveContainer width="100%" height={50}>
+                      <LineChart data={serie} margin={{ top: 4, bottom: 4, left: 0, right: 0 }}>
+                        <Line type="monotone" dataKey="valor" stroke={color} strokeWidth={2} dot={false} />
+                        <Tooltip contentStyle={{ borderRadius: 8, border: "1px solid #e2e8f0", fontSize: 11 }}
+                          formatter={(v) => fmtKpi(v, k.kpi)} labelStyle={{ display: "none" }} />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════
+// VISTA: Marketing (contenedor de pestañas)
+// ═════════════════════════════════════════════════════════════
 function Marketing(props) {
   const [tab, setTab] = useState("presupuesto");
   const tabs = [
     { key: "presupuesto", label: "Presupuesto", icon: Wallet },
     { key: "estadisticas", label: "Estadísticas", icon: TrendingUp },
+    { key: "kpis", label: "KPIs de contenido", icon: BarChart3 },
     { key: "calendario", label: "Calendario de contenidos", icon: Calendar },
     { key: "equipo", label: "Equipo de marketing", icon: Users },
   ];
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 w-fit">
+      <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 w-fit flex-wrap">
         {tabs.map((t) => {
           const active = tab === t.key;
           return (
@@ -2033,15 +2139,16 @@ function Marketing(props) {
           );
         })}
       </div>
-      {tab === "presupuesto" && <MarketingPresupuesto presupuesto={props.presupuesto} importarPresupuesto={props.importarPresupuesto} limpiarPresupuesto={props.limpiarPresupuesto} />}
+      {tab === "presupuesto" && <MarketingPresupuesto presupuesto={props.presupuesto} importarPresupuesto={props.importarPresupuesto} limpiarPresupuesto={props.limpiarPresupuesto} importarKpis={props.importarKpis} />}
       {tab === "estadisticas" && <EstadisticasMkt presupuesto={props.presupuesto} contenidos={props.contenidos} />}
+      {tab === "kpis" && <KpisContenido kpis={props.kpis} limpiarKpis={props.limpiarKpis} />}
       {tab === "calendario" && <CalendarioContenidos contenidos={props.contenidos} equipoMkt={props.equipoMkt} addContenido={props.addContenido} updateContenido={props.updateContenido} deleteContenido={props.deleteContenido} />}
       {tab === "equipo" && <EquipoMarketing equipoMkt={props.equipoMkt} addMiembroMkt={props.addMiembroMkt} updateMiembroMkt={props.updateMiembroMkt} deleteMiembroMkt={props.deleteMiembroMkt} />}
     </div>
   );
 }
 
-function MarketingPresupuesto({ presupuesto, importarPresupuesto, limpiarPresupuesto }) {
+function MarketingPresupuesto({ presupuesto, importarPresupuesto, limpiarPresupuesto, importarKpis }) {
   const [importando, setImportando] = useState(false);
   const [error, setError] = useState("");
   const [mesFiltro, setMesFiltro] = useState("Todos");
@@ -2061,6 +2168,13 @@ function MarketingPresupuesto({ presupuesto, importarPresupuesto, limpiarPresupu
         setError("No se encontraron datos de presupuesto en el archivo.");
       } else {
         importarPresupuesto(res.items);
+      }
+      // Importar también los KPIs de contenido (si la hoja existe)
+      if (importarKpis) {
+        try {
+          const resKpis = parseKpisWorkbook(wb, XLSX);
+          if (resKpis.kpis && resKpis.kpis.length > 0) importarKpis(resKpis.kpis);
+        } catch (e2) { console.error("KPIs no importados:", e2); }
       }
     } catch (err) {
       console.error(err);
@@ -2473,6 +2587,7 @@ export default function App() {
   const [presupuesto, setPresupuesto] = useState([]);
   const [contenidos, setContenidos] = useState([]);
   const [equipoMkt, setEquipoMkt] = useState([]);
+  const [kpis, setKpis] = useState([]);
 
   // Estado de sincronización con la nube
   const [cargando, setCargando] = useState(supabaseHabilitado);
@@ -2501,6 +2616,8 @@ export default function App() {
         if (activo) setContenidos(cont);
         const eqm = await fetchEquipoMkt();
         if (activo) setEquipoMkt(eqm);
+        const kp = await fetchKpis();
+        if (activo) setKpis(kp);
       } catch (e) {
         console.error("Error cargando de Supabase:", e);
         if (activo) setSyncEstado("error");
@@ -2584,6 +2701,14 @@ export default function App() {
     }, 800);
     return () => clearTimeout(t);
   }, [equipoMkt, cargando]);
+
+  useEffect(() => {
+    if (!supabaseHabilitado || cargando) return;
+    const t = setTimeout(async () => {
+      try { await guardarKpis(kpis); } catch (e) { console.error("Error guardando KPIs:", e); }
+    }, 800);
+    return () => clearTimeout(t);
+  }, [kpis, cargando]);
 
   if (verificandoSesion) {
     return (
@@ -2696,6 +2821,8 @@ export default function App() {
   // Presupuesto: reemplaza todo con lo importado del Excel
   const importarPresupuesto = (items) => setPresupuesto(items);
   const limpiarPresupuesto = () => setPresupuesto([]);
+  const importarKpis = (items) => setKpis(items);
+  const limpiarKpis = () => setKpis([]);
 
   // Contenidos
   const addContenido = (data) => setContenidos([{ ...data, id: `cont-${Date.now()}` }, ...contenidos]);
@@ -2779,7 +2906,7 @@ export default function App() {
           {vista === "productos" && <Productos productos={productos} setProductos={setProductos} />}
           {vista === "mapa" && <MapaZonas agencias={agencias} />}
           {vista === "pipeline" && <Pipeline agencias={agencias} updateAgencia={updateAgencia} />}
-          {vista === "marketing" && <Marketing presupuesto={presupuesto} importarPresupuesto={importarPresupuesto} limpiarPresupuesto={limpiarPresupuesto} contenidos={contenidos} equipoMkt={equipoMkt} addContenido={addContenido} updateContenido={updateContenido} deleteContenido={deleteContenido} addMiembroMkt={addMiembroMkt} updateMiembroMkt={updateMiembroMkt} deleteMiembroMkt={deleteMiembroMkt} />}
+          {vista === "marketing" && <Marketing presupuesto={presupuesto} importarPresupuesto={importarPresupuesto} limpiarPresupuesto={limpiarPresupuesto} contenidos={contenidos} equipoMkt={equipoMkt} addContenido={addContenido} updateContenido={updateContenido} deleteContenido={deleteContenido} addMiembroMkt={addMiembroMkt} updateMiembroMkt={updateMiembroMkt} deleteMiembroMkt={deleteMiembroMkt} kpis={kpis} importarKpis={importarKpis} limpiarKpis={limpiarKpis} />}
           {vista === "distribucion" && <Distribucion agencias={agencias} equipo={equipo} addMiembro={addMiembro} updateMiembro={updateMiembro} deleteMiembro={deleteMiembro} />}
         </div>
       </main>
