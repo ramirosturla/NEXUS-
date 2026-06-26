@@ -470,3 +470,73 @@ export const ESTADOS_CONTENIDO = [
 
 export const canalContenido = (key) => CANALES_CONTENIDO.find((c) => c.key === key) || CANALES_CONTENIDO[0];
 export const estadoContenido = (key) => ESTADOS_CONTENIDO.find((e) => e.key === key) || ESTADOS_CONTENIDO[0];
+
+// ─────────────────────────────────────────────────────────────
+// KPIs DE MARKETING (hoja INPUT_KPIs del Excel)
+// ─────────────────────────────────────────────────────────────
+const MESES_KPI = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+// Limpia el emoji y espacios del nombre de bloque/KPI
+const limpiarTexto = (s) => String(s || "").replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}]/gu, "").trim();
+
+// Parser de la hoja INPUT_KPIs
+export const parseKpisWorkbook = (wb, XLSX) => {
+  const hoja = wb.SheetNames.find((s) => /kpi/i.test(s));
+  if (!hoja) return { hoja: null, kpis: [] };
+
+  const ws = wb.Sheets[hoja];
+  const filas = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+  const toNum = (v) =>
+    typeof v === "number" ? v : (v != null && !isNaN(parseFloat(v)) ? parseFloat(v) : null);
+
+  const kpis = [];
+  let bloqueActual = "General";
+
+  // Datos desde la fila 5 (índice 4); el encabezado está en la fila 4 (índice 3)
+  for (let i = 4; i < filas.length; i++) {
+    const f = filas[i] || [];
+    const bloqueRaw = limpiarTexto(f[0]);
+    const kpiNombre = limpiarTexto(f[1]);
+    if (bloqueRaw) bloqueActual = bloqueRaw; // arrastrar el último bloque visto
+    if (!kpiNombre) continue;
+
+    const meta = f[3] != null ? String(f[3]).trim() : "";
+    const meses = {};
+    let tieneValor = false;
+    MESES_KPI.forEach((m, idx) => {
+      const val = toNum(f[4 + idx]);
+      meses[m] = val;
+      if (val != null) tieneValor = true;
+    });
+    const promedio = toNum(f[16]);
+
+    if (!tieneValor && promedio == null) continue; // saltar KPIs vacíos
+
+    kpis.push({
+      id: `kpi-${bloqueActual}-${kpiNombre}-${Math.random().toString(36).slice(2, 6)}`,
+      bloque: bloqueActual,
+      kpi: kpiNombre,
+      meta,
+      meses,
+      promedio,
+    });
+  }
+  return { hoja, kpis, total: kpis.length };
+};
+
+// Colores por bloque de KPI
+export const COLOR_BLOQUE = {
+  "RRSS Orgánico": "#E1306C",
+  "Meta Ads": "#1877F2",
+  "Manual / Sistema": "#7c3aed",
+  "Dato Interno / E": "#f59e0b",
+  "Dato Interno / Email": "#f59e0b",
+  "Sitio Web / SEO": "#0891b2",
+  "Chatbot / WhatsA": "#25D366",
+  "Chatbot / WhatsApp": "#25D366",
+};
+export const colorBloque = (b) => {
+  const hit = Object.keys(COLOR_BLOQUE).find((k) => b.includes(k) || k.includes(b));
+  return hit ? COLOR_BLOQUE[hit] : "#0f3d63";
+};
