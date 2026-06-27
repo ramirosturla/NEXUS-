@@ -392,3 +392,100 @@ export async function actualizarPerfil(id, cambios) {
   const { error } = await supabase.from("perfiles").update(row).eq("id", id);
   if (error) throw error;
 }
+
+// ═════════════════════════════════════════════════════════════
+// FUNCIONES GRANULARES (guardado por registro)
+// ═════════════════════════════════════════════════════════════
+// Estas funciones guardan o borran UN solo registro en vez de reescribir
+// toda la lista. Son más eficientes y más seguras (nunca pueden borrar de
+// más). Hoy la app usa el guardado por lista (guardarAgencias, etc.); estas
+// quedan disponibles para migrar a guardado granular registro por registro.
+//
+// Ejemplo de uso futuro en el componente:
+//   await upsertAgencia(agenciaModificada);   // en vez de guardarAgencias(listaCompleta)
+//   await eliminarAgencia(id);                // borrado explícito e intencional
+
+// — Agencias —
+export async function upsertAgencia(agencia) {
+  if (!supabaseHabilitado || !agencia) return;
+  const { error } = await supabase.from("agencias").upsert(agenciaToDB(agencia));
+  if (error) throw error;
+}
+export async function eliminarAgencia(id) {
+  if (!supabaseHabilitado || id == null) return;
+  const { error } = await supabase.from("agencias").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// — Productos —
+export async function upsertProducto(producto) {
+  if (!supabaseHabilitado || !producto) return;
+  const { error } = await supabase.from("productos").upsert(productoToDB(producto));
+  if (error) throw error;
+}
+export async function eliminarProducto(id) {
+  if (!supabaseHabilitado || id == null) return;
+  const { error } = await supabase.from("productos").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// — Equipo —
+export async function upsertMiembro(miembro) {
+  if (!supabaseHabilitado || !miembro) return;
+  const { error } = await supabase.from("equipo").upsert(miembroToDB(miembro));
+  if (error) throw error;
+}
+export async function eliminarMiembro(id) {
+  if (!supabaseHabilitado || id == null) return;
+  const { error } = await supabase.from("equipo").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// — Presupuesto —
+export async function upsertPresupuestoItem(item) {
+  if (!supabaseHabilitado || !item) return;
+  const { error } = await supabase.from("presupuesto").upsert(presupuestoToDB(item));
+  if (error) throw error;
+}
+export async function eliminarPresupuestoItem(id) {
+  if (!supabaseHabilitado || id == null) return;
+  const { error } = await supabase.from("presupuesto").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// — Contenidos (calendario) —
+export async function upsertContenido(contenido) {
+  if (!supabaseHabilitado || !contenido) return;
+  const { error } = await supabase.from("contenidos").upsert(contenidoToDB(contenido));
+  if (error) throw error;
+}
+export async function eliminarContenido(id) {
+  if (!supabaseHabilitado || id == null) return;
+  const { error } = await supabase.from("contenidos").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// — Equipo de marketing —
+export async function upsertMiembroMkt(miembro) {
+  if (!supabaseHabilitado || !miembro) return;
+  const row = { id: miembro.id, nombre: miembro.nombre, rol: miembro.rol || "Contenidos", activo: miembro.activo !== false };
+  const { error } = await supabase.from("equipo_mkt").upsert(row);
+  if (error) throw error;
+}
+export async function eliminarMiembroMkt(id) {
+  if (!supabaseHabilitado || id == null) return;
+  const { error } = await supabase.from("equipo_mkt").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// — KPIs —
+export async function upsertKpi(kpi) {
+  if (!supabaseHabilitado || !kpi) return;
+  const { error } = await supabase.from("kpis_mkt").upsert(kpiToDB(kpi));
+  if (error) throw error;
+}
+export async function eliminarKpi(id) {
+  if (!supabaseHabilitado || id == null) return;
+  const { error } = await supabase.from("kpis_mkt").delete().eq("id", id);
+  if (error) throw error;
+}
