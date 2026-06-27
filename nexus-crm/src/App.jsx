@@ -13,7 +13,7 @@ import {
   Tooltip, ResponsiveContainer, Legend, PieChart, Pie,
 } from "recharts";
 import {
-  BRAND, USUARIOS, EXCURSIONES, ESTADOS_AGENCIA, ETAPAS,
+  BRAND, EXCURSIONES, ESTADOS_AGENCIA, ETAPAS,
   AGENCIAS, DATOS_MENSUALES, ZONAS, fmt, totalPax,
   totalFacturado, geoDeCiudad, resumenPorZona, PRODUCTOS_INICIALES,
   CONDICIONES_PAGO, precioAgencia, parseRankingWorkbook,
@@ -70,7 +70,62 @@ function Logo({ size = 36, light = false }) {
 // ═════════════════════════════════════════════════════════════
 // Auxiliares
 // ═════════════════════════════════════════════════════════════
-function Avatar({ name, size = 28 }) {
+// Genera un ID único. Usa crypto.randomUUID() (estándar y sin colisiones);
+// si el navegador es muy viejo y no lo soporta, cae a un fallback con timestamp.
+const nuevoId = (prefijo = "") => {
+  let base;
+  try {
+    base = (crypto?.randomUUID?.() || "").slice(0, 8);
+  } catch { base = ""; }
+  if (!base) base = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  return prefijo ? `${prefijo}-${base}` : base;
+};
+
+// ─────────────────────────────────────────────────────────────
+// SISTEMA DE TOASTS (avisos visibles, sin dependencias externas)
+// ─────────────────────────────────────────────────────────────
+const ToastContext = React.createContext(null);
+// Hook para mostrar avisos desde cualquier componente: const toast = useToast();
+const useToast = () => React.useContext(ToastContext) || (() => {});
+
+function ToastProvider({ children }) {
+  const [toasts, setToasts] = useState([]);
+  const mostrar = React.useCallback((mensaje, tipo = "error") => {
+    const id = nuevoId("toast");
+    setToasts((prev) => [...prev, { id, mensaje, tipo }]);
+    // Auto-cierre a los 5 segundos
+    setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 5000);
+  }, []);
+  const cerrar = (id) => setToasts((prev) => prev.filter((t) => t.id !== id));
+
+  return (
+    <ToastContext.Provider value={mostrar}>
+      {children}
+      <div className="fixed bottom-5 right-5 z-[100] flex flex-col gap-2 max-w-sm">
+        {toasts.map((t) => {
+          const estilos = t.tipo === "error"
+            ? { bg: "#fef2f2", border: "#fecaca", color: "#b91c1c", icon: AlertTriangle }
+            : t.tipo === "ok"
+            ? { bg: "#f0fdf4", border: "#bbf7d0", color: "#15803d", icon: Cloud }
+            : { bg: "#eff6ff", border: "#bfdbfe", color: "#1d4ed8", icon: Cloud };
+          const Icono = estilos.icon;
+          return (
+            <div key={t.id} className="flex items-start gap-3 rounded-xl border px-4 py-3 shadow-lg animate-[slideIn_0.2s_ease-out]"
+              style={{ background: estilos.bg, borderColor: estilos.border }}>
+              <Icono size={18} style={{ color: estilos.color }} className="shrink-0 mt-0.5" />
+              <p className="text-sm flex-1" style={{ color: estilos.color }}>{t.mensaje}</p>
+              <button onClick={() => cerrar(t.id)} className="shrink-0 opacity-50 hover:opacity-100" style={{ color: estilos.color }}>
+                <X size={15} />
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </ToastContext.Provider>
+  );
+}
+
+const Avatar = React.memo(function Avatar({ name, size = 28 }) {
   const safe = (name && String(name).trim()) || "?";
   const initials = safe.split(" ").map((w) => w[0] || "").join("").slice(0, 2).toUpperCase() || "?";
   const hue = (safe.charCodeAt(0) * 11 + safe.length * 7) % 360;
@@ -80,10 +135,10 @@ function Avatar({ name, size = 28 }) {
       {initials}
     </div>
   );
-}
+});
 
-function EstadoBadge({ estado }) {
-  const c = ESTADOS_AGENCIA[estado];
+const EstadoBadge = React.memo(function EstadoBadge({ estado }) {
+  const c = ESTADOS_AGENCIA[estado] || { color: "#94a3b8", bg: "#f1f5f9", label: estado || "—" };
   return (
     <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full"
       style={{ color: c.color, background: c.bg }}>
@@ -91,7 +146,7 @@ function EstadoBadge({ estado }) {
       {c.label}
     </span>
   );
-}
+});
 
 const RESERVA_ESTADO = {
   Confirmada: { color: "#16a34a", bg: "#dcfce7", icon: CheckCircle2 },
@@ -247,7 +302,7 @@ function Login({ onLogin }) {
 // ═════════════════════════════════════════════════════════════
 // KPI Card
 // ═════════════════════════════════════════════════════════════
-function KpiCard({ icon: Icon, label, value, delta, accent }) {
+const KpiCard = React.memo(function KpiCard({ icon: Icon, label, value, delta, accent }) {
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-5 hover:shadow-md transition-all">
       <div className="flex items-start justify-between">
@@ -264,7 +319,7 @@ function KpiCard({ icon: Icon, label, value, delta, accent }) {
       <p className="text-sm text-slate-500 mt-0.5">{label}</p>
     </div>
   );
-}
+});
 
 // ═════════════════════════════════════════════════════════════
 // VISTA: Dashboard
@@ -361,7 +416,7 @@ function Dashboard({ agencias }) {
 // ═════════════════════════════════════════════════════════════
 // VISTA: Agencias (lista + detalle)
 // ═════════════════════════════════════════════════════════════
-function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, setPreciosAgencia, importarAgencias, addReserva, updateReserva, deleteReserva, updateAgencia, nombresEquipo }) {
+function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, setPreciosAgencia, importarAgencias, addReserva, updateReserva, deleteReserva, updateAgencia, nombresEquipo, soloLectura }) {
   const [sel, setSel] = useState(null);
   const [search, setSearch] = useState("");
   const [filtro, setFiltro] = useState("Todas");
@@ -375,7 +430,7 @@ function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, s
       <AgenciaDetalle ag={ag} onBack={() => setSel(null)} addVisita={addVisita}
         deleteAgencia={(id) => { deleteAgencia(id); setSel(null); }}
         productos={productos} setPreciosAgencia={setPreciosAgencia} addReserva={addReserva}
-        updateReserva={updateReserva} deleteReserva={deleteReserva} updateAgencia={updateAgencia} />
+        updateReserva={updateReserva} deleteReserva={deleteReserva} updateAgencia={updateAgencia} soloLectura={soloLectura} />
     );
   }
 
@@ -411,6 +466,7 @@ function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, s
             className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
         </div>
         <div className="flex items-center gap-2">
+          {!soloLectura && <>
           <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile} className="hidden" />
           <button onClick={() => fileRef.current?.click()}
             className="inline-flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50 transition-colors">
@@ -421,6 +477,7 @@ function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, s
             style={{ background: BRAND.abismo }}>
             <Plus size={16} /> Nueva agencia
           </button>
+          </>}
         </div>
       </div>
 
@@ -510,7 +567,7 @@ function Agencias({ agencias, addAgencia, addVisita, deleteAgencia, productos, s
 }
 
 // Fila de reserva editable (pasajeros con +/-, recalcula monto, borrar)
-function ReservaRow({ r, ag, productos, updateReserva, deleteReserva }) {
+const ReservaRow = React.memo(function ReservaRow({ r, ag, productos, updateReserva, deleteReserva, soloLectura }) {
   const [editando, setEditando] = useState(false);
   const [pax, setPax] = useState(r.pax);
   const e = RESERVA_ESTADO[r.estado];
@@ -560,7 +617,7 @@ function ReservaRow({ r, ag, productos, updateReserva, deleteReserva }) {
               <button onClick={() => { setPax(r.pax); setEditando(false); }} title="Cancelar"
                 className="w-7 h-7 rounded hover:bg-slate-100 flex items-center justify-center text-slate-400"><X size={14} /></button>
             </>
-          ) : (
+          ) : soloLectura ? null : (
             <>
               <button onClick={() => setEditando(true)} title="Editar pasajeros"
                 className="w-7 h-7 rounded hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-cyan-600"><Pencil size={14} /></button>
@@ -572,10 +629,10 @@ function ReservaRow({ r, ag, productos, updateReserva, deleteReserva }) {
       </td>
     </tr>
   );
-}
+});
 
 // Detalle de una agencia con histórico
-function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPreciosAgencia, addReserva, updateReserva, deleteReserva, updateAgencia }) {
+function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPreciosAgencia, addReserva, updateReserva, deleteReserva, updateAgencia, soloLectura }) {
   const [showVisita, setShowVisita] = useState(false);
   const [showPrecios, setShowPrecios] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
@@ -624,6 +681,7 @@ function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPr
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap justify-end">
+              {!soloLectura && <>
               <button onClick={() => setShowReserva(true)}
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-white px-3 py-2 rounded-lg transition-opacity hover:opacity-90"
                 style={{ background: BRAND.abismo }}>
@@ -637,6 +695,7 @@ function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPr
                 className="inline-flex items-center gap-1.5 text-xs font-medium text-rose-600 border border-rose-200 px-3 py-2 rounded-lg hover:bg-rose-50 transition-colors">
                 <AlertTriangle size={14} /> Eliminar
               </button>
+              </>}
             </div>
           </div>
         </div>
@@ -655,8 +714,9 @@ function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPr
                 const c = ESTADOS_AGENCIA[est];
                 const activo = ag.estado === est;
                 return (
-                  <button key={est} onClick={() => updateAgencia(ag.id, { estado: est })}
-                    className="flex-1 text-sm font-medium py-2.5 rounded-lg border transition-all"
+                  <button key={est} onClick={() => !soloLectura && updateAgencia(ag.id, { estado: est })}
+                    disabled={soloLectura}
+                    className="flex-1 text-sm font-medium py-2.5 rounded-lg border transition-all disabled:cursor-default"
                     style={activo
                       ? { background: c.bg, color: c.color, borderColor: c.color, boxShadow: `0 0 0 1px ${c.color}` }
                       : { background: "#fff", color: "#94a3b8", borderColor: "#e2e8f0" }}>
@@ -677,9 +737,9 @@ function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPr
                 const actual = (ag.etapaCaptacion || "contacto") === etapa.key;
                 return (
                   <React.Fragment key={etapa.key}>
-                    <button onClick={() => updateAgencia(ag.id, { etapaCaptacion: etapa.key })}
-                      title={etapa.label}
-                      className="flex-1 text-xs font-medium py-2.5 px-1 rounded-lg border transition-all text-center leading-tight"
+                    <button onClick={() => !soloLectura && updateAgencia(ag.id, { etapaCaptacion: etapa.key })}
+                      title={etapa.label} disabled={soloLectura}
+                      className="flex-1 text-xs font-medium py-2.5 px-1 rounded-lg border transition-all text-center leading-tight disabled:cursor-default"
                       style={actual
                         ? { background: etapa.color + "18", color: etapa.color, borderColor: etapa.color }
                         : { background: "#fff", color: "#94a3b8", borderColor: "#e2e8f0" }}>
@@ -730,7 +790,7 @@ function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPr
                 )}
                 {[...ag.reservas].sort((a, b) => b.fecha.localeCompare(a.fecha)).map((r) => (
                   <ReservaRow key={r.id} r={r} ag={ag} productos={productos}
-                    updateReserva={updateReserva} deleteReserva={deleteReserva} />
+                    updateReserva={updateReserva} deleteReserva={deleteReserva} soloLectura={soloLectura} />
                 ))}
               </tbody>
             </table>
@@ -744,11 +804,11 @@ function AgenciaDetalle({ ag, onBack, addVisita, deleteAgencia, productos, setPr
               <h3 className="font-semibold text-slate-800">Visitas comerciales</h3>
               <p className="text-sm text-slate-500 mt-0.5">Bitácora de contactos</p>
             </div>
-            <button onClick={() => setShowVisita(true)}
+            {!soloLectura && <button onClick={() => setShowVisita(true)}
               className="inline-flex items-center gap-1.5 text-xs font-medium text-white px-3 py-2 rounded-lg transition-opacity hover:opacity-90 shrink-0"
               style={{ background: BRAND.abismo }}>
               <Plus size={14} /> Registrar
-            </button>
+            </button>}
           </div>
           <div className="flex-1 p-5">
             {visitas.length === 0 && (
@@ -1281,7 +1341,7 @@ function MapaZonas({ agencias }) {
 // ═════════════════════════════════════════════════════════════
 // VISTA: Productos (catálogo de excursiones y tarifas)
 // ═════════════════════════════════════════════════════════════
-function Productos({ productos, setProductos }) {
+function Productos({ productos, setProductos, soloLectura }) {
   const [editId, setEditId] = useState(null);
   const [editVal, setEditVal] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -1307,11 +1367,11 @@ function Productos({ productos, setProductos }) {
           {productos.length} productos en el catálogo · <span className="text-emerald-600 font-medium">{activos} activos</span>.
           El precio base es la tarifa de referencia; cada agencia puede tener su precio propio.
         </p>
-        <button onClick={() => setShowForm(true)}
+        {!soloLectura && <button onClick={() => setShowForm(true)}
           className="inline-flex items-center gap-2 text-white text-sm font-medium px-4 py-2 rounded-lg transition-opacity hover:opacity-90 shrink-0"
           style={{ background: BRAND.abismo }}>
           <Plus size={16} /> Nuevo producto
-        </button>
+        </button>}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -1324,8 +1384,8 @@ function Productos({ productos, setProductos }) {
                 style={{ background: (p.color || BRAND.marea) + "18" }}>
                 <Ship size={22} style={{ color: p.color || BRAND.marea }} />
               </div>
-              <button onClick={() => toggleActivo(p.id)}
-                className={`text-xs font-medium px-2.5 py-1 rounded-full transition-colors ${
+              <button onClick={() => !soloLectura && toggleActivo(p.id)} disabled={soloLectura}
+                className={`text-xs font-medium px-2.5 py-1 rounded-full transition-colors disabled:cursor-default ${
                   p.activo ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
                 }`}>
                 {p.activo ? "Activo" : "Inactivo"}
@@ -1355,10 +1415,10 @@ function Productos({ productos, setProductos }) {
               ) : (
                 <div className="flex items-center justify-between">
                   <p className="text-xl font-bold text-slate-800">{fmt(p.precioBase)}</p>
-                  <button onClick={() => { setEditId(p.id); setEditVal(String(p.precioBase)); }}
+                  {!soloLectura && <button onClick={() => { setEditId(p.id); setEditVal(String(p.precioBase)); }}
                     className="inline-flex items-center gap-1 text-xs font-medium text-cyan-700 hover:text-cyan-800">
                     <Pencil size={13} /> Editar
-                  </button>
+                  </button>}
                 </div>
               )}
             </div>
@@ -1381,7 +1441,7 @@ function ProductoForm({ onClose, onSave }) {
     if (!form.nombre.trim() || form.precioBase === "") return;
     const COLORES = ["#0f3d63", "#16a3b8", "#0e7490", "#0891b2", "#155e75", "#0284c7", "#0d9488"];
     onSave({
-      id: "prod-" + Date.now(),
+      id: nuevoId("prod"),
       nombre: form.nombre.trim(),
       salida: form.salida.trim() || "Tigre",
       duracion: form.duracion.trim() || "—",
@@ -1434,7 +1494,7 @@ function ProductoForm({ onClose, onSave }) {
   );
 }
 
-function Pipeline({ agencias, updateAgencia }) {
+function Pipeline({ agencias, updateAgencia, soloLectura }) {
   const [dragId, setDragId] = useState(null);
 
   // Cada agencia se ubica por su etapaCaptacion (por defecto "contacto")
@@ -1455,7 +1515,7 @@ function Pipeline({ agencias, updateAgencia }) {
           return (
             <div key={etapa.key}
               onDragOver={(e) => e.preventDefault()}
-              onDrop={() => { if (dragId != null) { updateAgencia(dragId, { etapaCaptacion: etapa.key }); setDragId(null); } }}
+              onDrop={() => { if (!soloLectura && dragId != null) { updateAgencia(dragId, { etapaCaptacion: etapa.key }); setDragId(null); } }}
               className="bg-slate-100/70 rounded-xl p-3 min-h-[200px]">
               <div className="flex items-center justify-between mb-2 px-1">
                 <div className="flex items-center gap-2">
@@ -1470,8 +1530,8 @@ function Pipeline({ agencias, updateAgencia }) {
                   const idx = ETAPAS.findIndex((e) => e.key === etapa.key);
                   const ec = ESTADOS_AGENCIA[c.estado] || ESTADOS_AGENCIA.Prospecto;
                   return (
-                    <div key={c.id} draggable onDragStart={() => setDragId(c.id)}
-                      className="bg-white rounded-lg border border-slate-200 p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow group"
+                    <div key={c.id} draggable={!soloLectura} onDragStart={() => !soloLectura && setDragId(c.id)}
+                      className={`bg-white rounded-lg border border-slate-200 p-3 hover:shadow-md transition-shadow group ${soloLectura ? "" : "cursor-grab active:cursor-grabbing"}`}
                       style={{ borderLeft: `3px solid ${etapa.color}` }}>
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-medium text-slate-800 text-sm leading-tight">{c.nombre}</p>
@@ -1487,11 +1547,11 @@ function Pipeline({ agencias, updateAgencia }) {
                         <span className="text-xs text-slate-500">{c.ejecutivo || "Sin asignar"}</span>
                       </div>
                       <div className="flex gap-1 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {idx > 0 && (
+                        {!soloLectura && idx > 0 && (
                           <button onClick={() => updateAgencia(c.id, { etapaCaptacion: ETAPAS[idx - 1].key })}
                             className="text-xs flex-1 py-1 rounded border border-slate-200 text-slate-500 hover:bg-slate-50">← Atrás</button>
                         )}
-                        {idx < ETAPAS.length - 1 && (
+                        {!soloLectura && idx < ETAPAS.length - 1 && (
                           <button onClick={() => updateAgencia(c.id, { etapaCaptacion: ETAPAS[idx + 1].key })}
                             className="text-xs flex-1 py-1 rounded border border-slate-200 text-slate-500 hover:bg-slate-50 inline-flex items-center justify-center gap-1">
                             Avanzar <ArrowRight size={11} />
@@ -1527,7 +1587,7 @@ function Pipeline({ agencias, updateAgencia }) {
 const MESES_LARGOS = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 const DIAS_SEMANA = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"];
 
-function CalendarioContenidos({ contenidos, equipoMkt, addContenido, updateContenido, deleteContenido }) {
+function CalendarioContenidos({ contenidos, equipoMkt, addContenido, updateContenido, deleteContenido, soloLectura }) {
   const hoy = new Date();
   const [mes, setMes] = useState(hoy.getMonth());
   const [anio, setAnio] = useState(hoy.getFullYear());
@@ -1576,11 +1636,11 @@ function CalendarioContenidos({ contenidos, equipoMkt, addContenido, updateConte
             <button onClick={() => setVista("calendario")} className="text-xs font-medium px-2.5 py-1 rounded-md transition-colors" style={vista === "calendario" ? { background: "#fff", color: BRAND.abismo } : { color: "#64748b" }}>Mes</button>
             <button onClick={() => setVista("lista")} className="text-xs font-medium px-2.5 py-1 rounded-md transition-colors" style={vista === "lista" ? { background: "#fff", color: BRAND.abismo } : { color: "#64748b" }}>Lista</button>
           </div>
-          <button onClick={() => setEditando({ fecha: fechaStr(hoy.getDate()) })}
+          {!soloLectura && <button onClick={() => setEditando({ fecha: fechaStr(hoy.getDate()) })}
             className="inline-flex items-center gap-1.5 text-white text-sm font-medium px-4 py-2 rounded-lg hover:opacity-90"
             style={{ background: BRAND.abismo }}>
             <Plus size={15} /> Nueva actividad
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -1701,7 +1761,7 @@ function CalendarioContenidos({ contenidos, equipoMkt, addContenido, updateConte
 
       {editando && (
         <ContenidoForm contenido={editando.id ? editando : null} fechaInicial={editando.fecha}
-          equipoMkt={equipoMkt}
+          equipoMkt={equipoMkt} soloLectura={soloLectura}
           onClose={() => setEditando(null)}
           onSave={(data) => { editando.id ? updateContenido(editando.id, data) : addContenido(data); setEditando(null); }}
           onDelete={editando.id ? () => { deleteContenido(editando.id); setEditando(null); } : null} />
@@ -1710,7 +1770,7 @@ function CalendarioContenidos({ contenidos, equipoMkt, addContenido, updateConte
   );
 }
 
-function ContenidoForm({ contenido, fechaInicial, equipoMkt, onClose, onSave, onDelete }) {
+function ContenidoForm({ contenido, fechaInicial, equipoMkt, onClose, onSave, onDelete, soloLectura }) {
   const [form, setForm] = useState({
     titulo: contenido?.titulo || "",
     descripcion: contenido?.descripcion || "",
@@ -1810,6 +1870,9 @@ function ContenidoForm({ contenido, fechaInicial, equipoMkt, onClose, onSave, on
           </Field>
         </div>
         <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
+          {soloLectura ? (
+            <button onClick={onClose} className="flex-1 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg py-2 hover:bg-slate-50">Cerrar</button>
+          ) : (<>
           {onDelete && (
             <button onClick={onDelete} className="text-sm font-medium text-rose-600 border border-rose-200 rounded-lg px-4 py-2 hover:bg-rose-50">
               Eliminar
@@ -1817,6 +1880,7 @@ function ContenidoForm({ contenido, fechaInicial, equipoMkt, onClose, onSave, on
           )}
           <button onClick={onClose} className="flex-1 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg py-2 hover:bg-slate-50">Cancelar</button>
           <button onClick={submit} className="flex-1 text-sm font-medium text-white rounded-lg py-2 hover:opacity-90" style={{ background: BRAND.abismo }}>Guardar</button>
+          </>)}
         </div>
       </div>
     </div>
@@ -1826,7 +1890,7 @@ function ContenidoForm({ contenido, fechaInicial, equipoMkt, onClose, onSave, on
 // ═════════════════════════════════════════════════════════════
 // Equipo de marketing
 // ═════════════════════════════════════════════════════════════
-function EquipoMarketing({ equipoMkt, addMiembroMkt, updateMiembroMkt, deleteMiembroMkt }) {
+function EquipoMarketing({ equipoMkt, addMiembroMkt, updateMiembroMkt, deleteMiembroMkt, soloLectura }) {
   const [showForm, setShowForm] = useState(false);
   const [nombre, setNombre] = useState("");
   const [rol, setRol] = useState("Contenidos");
@@ -1847,11 +1911,11 @@ function EquipoMarketing({ equipoMkt, addMiembroMkt, updateMiembroMkt, deleteMie
             <h3 className="font-semibold text-slate-800">Equipo de marketing</h3>
             <p className="text-sm text-slate-500 mt-0.5">Quiénes producen el contenido</p>
           </div>
-          <button onClick={() => setShowForm(true)}
+          {!soloLectura && <button onClick={() => setShowForm(true)}
             className="inline-flex items-center gap-1.5 text-white text-sm font-medium px-3 py-2 rounded-lg hover:opacity-90 shrink-0"
             style={{ background: BRAND.abismo }}>
             <Plus size={15} /> Agregar
-          </button>
+          </button>}
         </div>
 
         {showForm && (
@@ -1890,12 +1954,14 @@ function EquipoMarketing({ equipoMkt, addMiembroMkt, updateMiembroMkt, deleteMie
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0">
+                {!soloLectura && <>
                 <button onClick={() => updateMiembroMkt(m.id, { activo: !m.activo })}
                   className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors ${m.activo ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>
                   {m.activo ? "Activo" : "Inactivo"}
                 </button>
                 <button onClick={() => deleteMiembroMkt(m.id)} title="Eliminar"
                   className="w-8 h-8 rounded-lg hover:bg-rose-50 flex items-center justify-center text-slate-400 hover:text-rose-600"><Trash2 size={15} /></button>
+                </>}
               </div>
             </div>
           ))}
@@ -2100,7 +2166,7 @@ function EstadisticasMkt({ presupuesto, contenidos }) {
 // ═════════════════════════════════════════════════════════════
 // VISTA: KPIs de contenido (importados de la hoja INPUT_KPIs)
 // ═════════════════════════════════════════════════════════════
-function KpisContenido({ kpis, limpiarKpis }) {
+function KpisContenido({ kpis, limpiarKpis, soloLectura }) {
   const MESES_ORD = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
   const [mesSel, setMesSel] = useState("Promedio");
 
@@ -2173,10 +2239,10 @@ function KpisContenido({ kpis, limpiarKpis }) {
             ))}
           </div>
         </div>
-        <button onClick={limpiarKpis} title="Borrar KPIs"
+        {!soloLectura && <button onClick={limpiarKpis} title="Borrar KPIs"
           className="w-9 h-9 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-rose-600 hover:border-rose-200">
           <Trash2 size={16} />
-        </button>
+        </button>}
       </div>
 
       {/* Grilla de los 19 KPIs */}
@@ -2238,16 +2304,16 @@ function Marketing(props) {
           );
         })}
       </div>
-      {tab === "presupuesto" && <MarketingPresupuesto presupuesto={props.presupuesto} importarPresupuesto={props.importarPresupuesto} limpiarPresupuesto={props.limpiarPresupuesto} importarKpis={props.importarKpis} />}
+      {tab === "presupuesto" && <MarketingPresupuesto presupuesto={props.presupuesto} importarPresupuesto={props.importarPresupuesto} limpiarPresupuesto={props.limpiarPresupuesto} importarKpis={props.importarKpis} soloLectura={props.soloLectura} />}
       {tab === "estadisticas" && <EstadisticasMkt presupuesto={props.presupuesto} contenidos={props.contenidos} />}
-      {tab === "kpis" && <KpisContenido kpis={props.kpis} limpiarKpis={props.limpiarKpis} />}
-      {tab === "calendario" && <CalendarioContenidos contenidos={props.contenidos} equipoMkt={props.equipoMkt} addContenido={props.addContenido} updateContenido={props.updateContenido} deleteContenido={props.deleteContenido} />}
-      {tab === "equipo" && <EquipoMarketing equipoMkt={props.equipoMkt} addMiembroMkt={props.addMiembroMkt} updateMiembroMkt={props.updateMiembroMkt} deleteMiembroMkt={props.deleteMiembroMkt} />}
+      {tab === "kpis" && <KpisContenido kpis={props.kpis} limpiarKpis={props.limpiarKpis} soloLectura={props.soloLectura} />}
+      {tab === "calendario" && <CalendarioContenidos contenidos={props.contenidos} equipoMkt={props.equipoMkt} addContenido={props.addContenido} updateContenido={props.updateContenido} deleteContenido={props.deleteContenido} soloLectura={props.soloLectura} />}
+      {tab === "equipo" && <EquipoMarketing equipoMkt={props.equipoMkt} addMiembroMkt={props.addMiembroMkt} updateMiembroMkt={props.updateMiembroMkt} deleteMiembroMkt={props.deleteMiembroMkt} soloLectura={props.soloLectura} />}
     </div>
   );
 }
 
-function MarketingPresupuesto({ presupuesto, importarPresupuesto, limpiarPresupuesto, importarKpis }) {
+function MarketingPresupuesto({ presupuesto, importarPresupuesto, limpiarPresupuesto, importarKpis, soloLectura }) {
   const [importando, setImportando] = useState(false);
   const [error, setError] = useState("");
   const [mesFiltro, setMesFiltro] = useState("Todos");
@@ -2323,14 +2389,18 @@ function MarketingPresupuesto({ presupuesto, importarPresupuesto, limpiarPresupu
         </div>
         <h3 className="text-lg font-bold text-slate-800">Cargá tu presupuesto de marketing</h3>
         <p className="text-sm text-slate-500 mt-2 mb-6">
-          Importá el Excel de presupuesto y vas a ver el proyectado vs. ejecutado por categoría, la variación y la evolución mes a mes.
+          {soloLectura
+            ? "Todavía no hay un presupuesto cargado. Un usuario con permiso de edición puede importarlo desde el Excel."
+            : "Importá el Excel de presupuesto y vas a ver el proyectado vs. ejecutado por categoría, la variación y la evolución mes a mes."}
         </p>
+        {!soloLectura && <>
         <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls" onChange={onFile} className="hidden" />
         <button onClick={() => fileRef.current?.click()} disabled={importando}
           className="inline-flex items-center gap-2 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-opacity hover:opacity-90 disabled:opacity-60"
           style={{ background: BRAND.abismo }}>
           {importando ? <><Loader2 size={16} className="animate-spin" /> Leyendo...</> : <><Upload size={16} /> Importar Excel de presupuesto</>}
         </button>
+        </>}
         {error && <p className="text-sm text-rose-600 mt-4">{error}</p>}
       </div>
     );
@@ -2353,6 +2423,7 @@ function MarketingPresupuesto({ presupuesto, importarPresupuesto, limpiarPresupu
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {!soloLectura && <>
           <input ref={fileRef} type="file" accept=".xlsx,.xlsm,.xls" onChange={onFile} className="hidden" />
           <button onClick={() => fileRef.current?.click()} disabled={importando}
             className="inline-flex items-center gap-2 text-white text-sm font-medium px-4 py-2 rounded-lg transition-opacity hover:opacity-90 disabled:opacity-60"
@@ -2363,6 +2434,7 @@ function MarketingPresupuesto({ presupuesto, importarPresupuesto, limpiarPresupu
             className="w-9 h-9 rounded-lg border border-slate-200 flex items-center justify-center text-slate-400 hover:text-rose-600 hover:border-rose-200">
             <Trash2 size={16} />
           </button>
+          </>}
         </div>
       </div>
       {error && <p className="text-sm text-rose-600">{error}</p>}
@@ -2479,7 +2551,7 @@ function MarketingPresupuesto({ presupuesto, importarPresupuesto, limpiarPresupu
 // ═════════════════════════════════════════════════════════════
 // VISTA: Distribución (equipo)
 // ═════════════════════════════════════════════════════════════
-function Distribucion({ agencias, equipo, addMiembro, updateMiembro, deleteMiembro }) {
+function Distribucion({ agencias, equipo, addMiembro, updateMiembro, deleteMiembro, soloLectura }) {
   const [roundRobin, setRoundRobin] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [nuevoNombre, setNuevoNombre] = useState("");
@@ -2529,11 +2601,11 @@ function Distribucion({ agencias, equipo, addMiembro, updateMiembro, deleteMiemb
             <h3 className="font-semibold text-slate-800">Equipo de cuentas</h3>
             <p className="text-sm text-slate-500 mt-0.5">Carga de agencias y pasajeros por miembro</p>
           </div>
-          <button onClick={() => setShowForm(true)}
+          {!soloLectura && <button onClick={() => setShowForm(true)}
             className="inline-flex items-center gap-1.5 text-white text-sm font-medium px-3 py-2 rounded-lg transition-opacity hover:opacity-90 shrink-0"
             style={{ background: BRAND.abismo }}>
             <Plus size={15} /> Agregar miembro
-          </button>
+          </button>}
         </div>
 
         {showForm && (
@@ -2593,6 +2665,7 @@ function Distribucion({ agencias, equipo, addMiembro, updateMiembro, deleteMiemb
                   <div className="w-24 h-2 bg-slate-100 rounded-full overflow-hidden hidden sm:block">
                     <div className="h-full rounded-full transition-all" style={{ width: (pax / maxPax * 100) + "%", background: BRAND.turquesa }} />
                   </div>
+                  {!soloLectura && <>
                   <button onClick={() => updateMiembro(m.id, { rol: esLider ? "Ejecutivo" : "Líder" })}
                     title="Cambiar rol"
                     className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-cyan-600">
@@ -2608,6 +2681,7 @@ function Distribucion({ agencias, equipo, addMiembro, updateMiembro, deleteMiemb
                     className="w-8 h-8 rounded-lg hover:bg-rose-50 flex items-center justify-center text-slate-400 hover:text-rose-600">
                     <Trash2 size={15} />
                   </button>
+                  </>}
                 </div>
               </div>
             );
@@ -2789,7 +2863,8 @@ function Usuarios({ miPerfil }) {
   );
 }
 
-export default function App() {
+function AppInterno() {
+  const toast = useToast();
   const [usuario, setUsuario] = useState(null);
   const [perfil, setPerfil] = useState(null);
   const [verificandoSesion, setVerificandoSesion] = useState(supabaseHabilitado);
@@ -2881,6 +2956,7 @@ export default function App() {
         console.error("Error cargando de Supabase:", e);
         if (activo) setSyncEstado("error");
         if (activo) setCargaFallo(true);
+        toast("No se pudieron cargar los datos. Recargá la página antes de hacer cambios para no perder información.", "error");
       } finally {
         if (activo) { setCargando(false); }
       }
@@ -2898,7 +2974,7 @@ export default function App() {
         setSyncEstado("guardado");
         setTimeout(() => setSyncEstado("idle"), 1500);
       } catch (e) {
-        console.error("Error guardando agencias:", e);
+        console.error("Error guardando agencias:", e); toast("No se pudo guardar un cambio en agencias. Revisá tu conexión.", "error");
         setSyncEstado("error");
       }
     }, 800);
@@ -2912,7 +2988,7 @@ export default function App() {
       try {
         await guardarProductos(productos);
       } catch (e) {
-        console.error("Error guardando productos:", e);
+        console.error("Error guardando productos:", e); toast("No se pudo guardar un cambio en productos.", "error");
       }
     }, 800);
     return () => clearTimeout(t);
@@ -2925,7 +3001,7 @@ export default function App() {
       try {
         await guardarEquipo(equipo);
       } catch (e) {
-        console.error("Error guardando equipo:", e);
+        console.error("Error guardando equipo:", e); toast("No se pudo guardar un cambio en el equipo.", "error");
       }
     }, 800);
     return () => clearTimeout(t);
@@ -2938,7 +3014,7 @@ export default function App() {
       try {
         await guardarPresupuesto(presupuesto);
       } catch (e) {
-        console.error("Error guardando presupuesto:", e);
+        console.error("Error guardando presupuesto:", e); toast("No se pudo guardar el presupuesto.", "error");
       }
     }, 800);
     return () => clearTimeout(t);
@@ -2948,7 +3024,7 @@ export default function App() {
   useEffect(() => {
     if (!supabaseHabilitado || cargando || cargaFallo) return;
     const t = setTimeout(async () => {
-      try { await guardarContenidos(contenidos); } catch (e) { console.error("Error guardando contenidos:", e); }
+      try { await guardarContenidos(contenidos); } catch (e) { console.error("Error guardando contenidos:", e); toast("No se pudo guardar el calendario.", "error"); }
     }, 800);
     return () => clearTimeout(t);
   }, [contenidos, cargando]);
@@ -2957,7 +3033,7 @@ export default function App() {
   useEffect(() => {
     if (!supabaseHabilitado || cargando || cargaFallo) return;
     const t = setTimeout(async () => {
-      try { await guardarEquipoMkt(equipoMkt); } catch (e) { console.error("Error guardando equipo mkt:", e); }
+      try { await guardarEquipoMkt(equipoMkt); } catch (e) { console.error("Error guardando equipo mkt:", e); toast("No se pudo guardar el equipo de marketing.", "error"); }
     }, 800);
     return () => clearTimeout(t);
   }, [equipoMkt, cargando]);
@@ -2965,7 +3041,7 @@ export default function App() {
   useEffect(() => {
     if (!supabaseHabilitado || cargando || cargaFallo) return;
     const t = setTimeout(async () => {
-      try { await guardarKpis(kpis); } catch (e) { console.error("Error guardando KPIs:", e); }
+      try { await guardarKpis(kpis); } catch (e) { console.error("Error guardando KPIs:", e); toast("No se pudieron guardar los KPIs.", "error"); }
     }, 800);
     return () => clearTimeout(t);
   }, [kpis, cargando]);
@@ -3011,54 +3087,57 @@ export default function App() {
     );
   }
 
-  const addAgencia = (a) => {
+  // Handlers memoizados con setters funcionales (prev => ...).
+  // Usar la forma funcional es CLAVE: el handler no captura una versión vieja
+  // de la lista, así que no puede pisar datos con estado obsoleto.
+  const addAgencia = useCallback((a) => {
     const geo = geoDeCiudad(a.ciudad, Date.now());
-    setAgencias([{ ...a, id: Date.now(), reservas: [], visitas: [], precios: {}, ...geo }, ...agencias]);
-  };
+    setAgencias((prev) => [{ ...a, id: Date.now(), reservas: [], visitas: [], precios: {}, ...geo }, ...prev]);
+  }, []);
 
-  const deleteAgencia = (agId) =>
-    setAgencias(agencias.filter((a) => a.id !== agId));
+  const deleteAgencia = useCallback((agId) =>
+    setAgencias((prev) => prev.filter((a) => a.id !== agId)), []);
 
-  const addVisita = (agId, visita) =>
-    setAgencias(agencias.map((a) =>
+  const addVisita = useCallback((agId, visita) =>
+    setAgencias((prev) => prev.map((a) =>
       a.id === agId
-        ? { ...a, visitas: [{ ...visita, id: `vis-${Date.now()}` }, ...(a.visitas || [])] }
+        ? { ...a, visitas: [{ ...visita, id: nuevoId("vis") }, ...(a.visitas || [])] }
         : a
-    ));
+    )), []);
 
-  const setPreciosAgencia = (agId, precios, condicionPago) =>
-    setAgencias(agencias.map((a) =>
+  const setPreciosAgencia = useCallback((agId, precios, condicionPago) =>
+    setAgencias((prev) => prev.map((a) =>
       a.id === agId ? { ...a, precios, condicionPago } : a
-    ));
+    )), []);
 
-  const addReserva = (agId, reserva) =>
-    setAgencias(agencias.map((a) =>
+  const addReserva = useCallback((agId, reserva) =>
+    setAgencias((prev) => prev.map((a) =>
       a.id === agId
-        ? { ...a, reservas: [{ ...reserva, id: `res-${Date.now()}` }, ...(a.reservas || [])] }
+        ? { ...a, reservas: [{ ...reserva, id: nuevoId("res") }, ...(a.reservas || [])] }
         : a
-    ));
+    )), []);
 
   // Editar una reserva existente (cantidad de pasajeros, recalcula monto)
-  const updateReserva = (agId, reservaId, cambios) =>
-    setAgencias(agencias.map((a) =>
+  const updateReserva = useCallback((agId, reservaId, cambios) =>
+    setAgencias((prev) => prev.map((a) =>
       a.id === agId
         ? { ...a, reservas: (a.reservas || []).map((r) => r.id === reservaId ? { ...r, ...cambios } : r) }
         : a
-    ));
+    )), []);
 
   // Borrar una reserva
-  const deleteReserva = (agId, reservaId) =>
-    setAgencias(agencias.map((a) =>
+  const deleteReserva = useCallback((agId, reservaId) =>
+    setAgencias((prev) => prev.map((a) =>
       a.id === agId
         ? { ...a, reservas: (a.reservas || []).filter((r) => r.id !== reservaId) }
         : a
-    ));
+    )), []);
 
   // Cambiar estado y/o etapa de captación de la agencia
-  const updateAgencia = (agId, cambios) =>
-    setAgencias(agencias.map((a) =>
+  const updateAgencia = useCallback((agId, cambios) =>
+    setAgencias((prev) => prev.map((a) =>
       a.id === agId ? { ...a, ...cambios } : a
-    ));
+    )), []);
 
   const nombresEquipo = equipo.filter((m) => m.activo).map((m) => m.nombre);
 
@@ -3092,28 +3171,28 @@ export default function App() {
   };
 
   // Lista de nombres del equipo activo (para selectores de "ejecutivo a cargo")
-  const addMiembro = (nombre, rol) =>
-    setEquipo([...equipo, { id: Date.now(), nombre: nombre.trim(), rol, activo: true }]);
-  const updateMiembro = (id, cambios) =>
-    setEquipo(equipo.map((m) => (m.id === id ? { ...m, ...cambios } : m)));
-  const deleteMiembro = (id) =>
-    setEquipo(equipo.filter((m) => m.id !== id));
+  const addMiembro = useCallback((nombre, rol) =>
+    setEquipo((prev) => [...prev, { id: nuevoId("eq"), nombre: nombre.trim(), rol, activo: true }]), []);
+  const updateMiembro = useCallback((id, cambios) =>
+    setEquipo((prev) => prev.map((m) => (m.id === id ? { ...m, ...cambios } : m))), []);
+  const deleteMiembro = useCallback((id) =>
+    setEquipo((prev) => prev.filter((m) => m.id !== id)), []);
 
   // Presupuesto: reemplaza todo con lo importado del Excel
-  const importarPresupuesto = (items) => setPresupuesto(items);
-  const limpiarPresupuesto = () => setPresupuesto([]);
-  const importarKpis = (items) => setKpis(items);
-  const limpiarKpis = () => setKpis([]);
+  const importarPresupuesto = useCallback((items) => setPresupuesto(items), []);
+  const limpiarPresupuesto = useCallback(() => setPresupuesto([]), []);
+  const importarKpis = useCallback((items) => setKpis(items), []);
+  const limpiarKpis = useCallback(() => setKpis([]), []);
 
   // Contenidos
-  const addContenido = (data) => setContenidos([{ ...data, id: `cont-${Date.now()}` }, ...contenidos]);
-  const updateContenido = (id, cambios) => setContenidos(contenidos.map((c) => c.id === id ? { ...c, ...cambios } : c));
-  const deleteContenido = (id) => setContenidos(contenidos.filter((c) => c.id !== id));
+  const addContenido = useCallback((data) => setContenidos((prev) => [{ ...data, id: nuevoId("cont") }, ...prev]), []);
+  const updateContenido = useCallback((id, cambios) => setContenidos((prev) => prev.map((c) => c.id === id ? { ...c, ...cambios } : c)), []);
+  const deleteContenido = useCallback((id) => setContenidos((prev) => prev.filter((c) => c.id !== id)), []);
 
   // Equipo de marketing
-  const addMiembroMkt = (nombre, rol) => setEquipoMkt([...equipoMkt, { id: `mkt-${Date.now()}`, nombre: nombre.trim(), rol, activo: true }]);
-  const updateMiembroMkt = (id, cambios) => setEquipoMkt(equipoMkt.map((m) => m.id === id ? { ...m, ...cambios } : m));
-  const deleteMiembroMkt = (id) => setEquipoMkt(equipoMkt.filter((m) => m.id !== id));
+  const addMiembroMkt = useCallback((nombre, rol) => setEquipoMkt((prev) => [...prev, { id: nuevoId("mkt"), nombre: nombre.trim(), rol, activo: true }]), []);
+  const updateMiembroMkt = useCallback((id, cambios) => setEquipoMkt((prev) => prev.map((m) => m.id === id ? { ...m, ...cambios } : m)), []);
+  const deleteMiembroMkt = useCallback((id) => setEquipoMkt((prev) => prev.filter((m) => m.id !== id)), []);
 
   const titulos = {
     dashboard: { t: "Dashboard del canal", s: "Visión general de agencias y pasajeros" },
@@ -3197,16 +3276,25 @@ export default function App() {
           <>
           {vista === "dashboard" && <Dashboard agencias={agencias} />}
           {vista === "agencias" && <Agencias agencias={agencias} addAgencia={addAgencia} addVisita={addVisita} deleteAgencia={deleteAgencia} productos={productos} setPreciosAgencia={setPreciosAgencia} importarAgencias={importarAgencias} addReserva={addReserva} updateReserva={updateReserva} deleteReserva={deleteReserva} updateAgencia={updateAgencia} nombresEquipo={nombresEquipo} soloLectura={!perfil?.puedeEditar} />}
-          {vista === "productos" && <Productos productos={productos} setProductos={setProductos} />}
+          {vista === "productos" && <Productos productos={productos} setProductos={setProductos} soloLectura={!perfil?.puedeEditar} />}
           {vista === "mapa" && <MapaZonas agencias={agencias} />}
-          {vista === "pipeline" && <Pipeline agencias={agencias} updateAgencia={updateAgencia} />}
-          {vista === "marketing" && <Marketing presupuesto={presupuesto} importarPresupuesto={importarPresupuesto} limpiarPresupuesto={limpiarPresupuesto} contenidos={contenidos} equipoMkt={equipoMkt} addContenido={addContenido} updateContenido={updateContenido} deleteContenido={deleteContenido} addMiembroMkt={addMiembroMkt} updateMiembroMkt={updateMiembroMkt} deleteMiembroMkt={deleteMiembroMkt} kpis={kpis} importarKpis={importarKpis} limpiarKpis={limpiarKpis} />}
-          {vista === "distribucion" && <Distribucion agencias={agencias} equipo={equipo} addMiembro={addMiembro} updateMiembro={updateMiembro} deleteMiembro={deleteMiembro} />}
+          {vista === "pipeline" && <Pipeline agencias={agencias} updateAgencia={updateAgencia} soloLectura={!perfil?.puedeEditar} />}
+          {vista === "marketing" && <Marketing presupuesto={presupuesto} importarPresupuesto={importarPresupuesto} limpiarPresupuesto={limpiarPresupuesto} contenidos={contenidos} equipoMkt={equipoMkt} addContenido={addContenido} updateContenido={updateContenido} deleteContenido={deleteContenido} addMiembroMkt={addMiembroMkt} updateMiembroMkt={updateMiembroMkt} deleteMiembroMkt={deleteMiembroMkt} kpis={kpis} importarKpis={importarKpis} limpiarKpis={limpiarKpis} soloLectura={!perfil?.puedeEditar} />}
+          {vista === "distribucion" && <Distribucion agencias={agencias} equipo={equipo} addMiembro={addMiembro} updateMiembro={updateMiembro} deleteMiembro={deleteMiembro} soloLectura={!perfil?.puedeEditar} />}
           {vista === "usuarios" && <Usuarios miPerfil={perfil} />}
           </>
           )}
         </div>
       </main>
     </div>
+  );
+}
+
+// Wrapper que provee el sistema de toasts a toda la app
+export default function App() {
+  return (
+    <ToastProvider>
+      <AppInterno />
+    </ToastProvider>
   );
 }
