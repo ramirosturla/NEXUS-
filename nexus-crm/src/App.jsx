@@ -139,28 +139,30 @@ function Login({ onLogin }) {
 
   return (
     <div className="min-h-screen flex font-sans">
-      {/* Panel izquierdo: imagen del Delta con overlay nautico */}
+      {/* Panel izquierdo: foto de las embarcaciones de Sturla */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden"
         style={{ background: `linear-gradient(135deg, ${BRAND.abismo} 0%, ${BRAND.marea} 55%, ${BRAND.turquesa} 130%)` }}>
         <img
-          src="https://images.unsplash.com/photo-1559827260-dc66d52bef19?auto=format&fit=crop&w=1200&q=80"
+          src="https://www.sturlaviajes.tur.ar/files/boats/2026/06/12/01KTY88AM7C5ZFKV1WN5GRVNGF.jpg"
           alt="" aria-hidden="true"
-          className="absolute inset-0 w-full h-full object-cover opacity-35"
+          className="absolute inset-0 w-full h-full object-cover opacity-80"
           onError={(e) => { e.currentTarget.style.display = "none"; }} />
-        <svg className="absolute bottom-0 left-0 w-full opacity-25" viewBox="0 0 1440 320" preserveAspectRatio="none" style={{ height: 220 }}>
+        {/* Degradado oscuro para que el texto se lea bien sobre la foto */}
+        <div className="absolute inset-0" style={{ background: `linear-gradient(180deg, ${BRAND.abismo}55 0%, transparent 35%, ${BRAND.abismo}cc 100%)` }} />
+        <svg className="absolute bottom-0 left-0 w-full opacity-20" viewBox="0 0 1440 320" preserveAspectRatio="none" style={{ height: 220 }}>
           <path fill="#ffffff" d="M0,160 C320,260 420,60 720,140 C1020,220 1200,80 1440,150 L1440,320 L0,320 Z" />
         </svg>
         <div className="relative z-10 flex flex-col justify-between p-12 text-white">
           <Logo size={46} light />
           <div>
-            <h2 className="text-3xl font-bold leading-tight tracking-tight">
+            <h2 className="text-3xl font-bold leading-tight tracking-tight" style={{ textShadow: "0 2px 12px rgba(0,0,0,0.4)" }}>
               Gestioná tu canal<br />de agencias
             </h2>
-            <p className="text-white/70 mt-3 max-w-sm">
+            <p className="text-white/80 mt-3 max-w-sm" style={{ textShadow: "0 1px 8px rgba(0,0,0,0.4)" }}>
               Reservas, pasajeros y excursiones del Delta del Paraná, todo en un solo lugar.
             </p>
           </div>
-          <p className="text-xs text-white/50">Sturla Viajes · Tigre · Delta del Paraná</p>
+          <p className="text-xs text-white/60">Sturla Viajes · Tigre · Delta del Paraná</p>
         </div>
       </div>
 
