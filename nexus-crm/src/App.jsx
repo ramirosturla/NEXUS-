@@ -3046,46 +3046,6 @@ function AppInterno() {
     return () => clearTimeout(t);
   }, [kpis, cargando]);
 
-  if (verificandoSesion) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: BRAND.abismo }}>
-        <Loader2 size={40} className="text-white animate-spin mb-4" />
-        <p className="text-white/80 text-sm">Verificando sesión...</p>
-      </div>
-    );
-  }
-
-  if (!usuario) return <Login onLogin={setUsuario} />;
-
-  // Usuario registrado pero sin rol asignado todavía
-  if (perfil && perfil.rol === "pendiente") {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-6" style={{ background: "#f7fafc" }}>
-        <div className="max-w-md text-center bg-white rounded-2xl border border-slate-200 p-10 shadow-sm">
-          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5" style={{ background: BRAND.espuma }}>
-            <Clock size={32} style={{ color: BRAND.turquesa }} />
-          </div>
-          <h2 className="text-lg font-bold text-slate-800">Tu cuenta está pendiente de aprobación</h2>
-          <p className="text-sm text-slate-500 mt-2">
-            Te registraste correctamente como <span className="font-medium">{usuario.email}</span>. Un administrador tiene que asignarte un rol antes de que puedas acceder. Volvé a entrar más tarde.
-          </p>
-          <button onClick={async () => { await signOut(); setUsuario(null); }}
-            className="mt-6 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg px-5 py-2 hover:bg-slate-50">
-            Cerrar sesión
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (cargando) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: BRAND.abismo }}>
-        <Loader2 size={40} className="text-white animate-spin mb-4" />
-        <p className="text-white/80 text-sm">Cargando datos del canal...</p>
-      </div>
-    );
-  }
 
   // Handlers memoizados con setters funcionales (prev => ...).
   // Usar la forma funcional es CLAVE: el handler no captura una versión vieja
@@ -3204,6 +3164,48 @@ function AppInterno() {
     distribucion: { t: "Equipo de cuentas", s: "Asignación y carga por ejecutivo" },
     usuarios: { t: "Usuarios y permisos", s: "Gestión de accesos y roles del sistema" },
   };
+
+
+  if (verificandoSesion) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: BRAND.abismo }}>
+        <Loader2 size={40} className="text-white animate-spin mb-4" />
+        <p className="text-white/80 text-sm">Verificando sesión...</p>
+      </div>
+    );
+  }
+
+  if (!usuario) return <Login onLogin={setUsuario} />;
+
+  // Usuario registrado pero sin rol asignado todavía
+  if (perfil && perfil.rol === "pendiente") {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-6" style={{ background: "#f7fafc" }}>
+        <div className="max-w-md text-center bg-white rounded-2xl border border-slate-200 p-10 shadow-sm">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5" style={{ background: BRAND.espuma }}>
+            <Clock size={32} style={{ color: BRAND.turquesa }} />
+          </div>
+          <h2 className="text-lg font-bold text-slate-800">Tu cuenta está pendiente de aprobación</h2>
+          <p className="text-sm text-slate-500 mt-2">
+            Te registraste correctamente como <span className="font-medium">{usuario.email}</span>. Un administrador tiene que asignarte un rol antes de que puedas acceder. Volvé a entrar más tarde.
+          </p>
+          <button onClick={async () => { await signOut(); setUsuario(null); }}
+            className="mt-6 text-sm font-medium text-slate-600 border border-slate-200 rounded-lg px-5 py-2 hover:bg-slate-50">
+            Cerrar sesión
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (cargando) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center" style={{ background: BRAND.abismo }}>
+        <Loader2 size={40} className="text-white animate-spin mb-4" />
+        <p className="text-white/80 text-sm">Cargando datos del canal...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex font-sans text-slate-900" style={{ background: "#f7fafc" }}>
