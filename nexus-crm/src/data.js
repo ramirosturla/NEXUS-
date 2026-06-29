@@ -609,6 +609,7 @@ export const cuentaInfo = (key) => CUENTAS.find((c) => c.key === key) || null;
 export const SECCIONES = [
   { key: "dashboard",    label: "Dashboard" },
   { key: "agencias",     label: "Agencias" },
+  { key: "sindicatos",   label: "Sindicatos" },
   { key: "productos",    label: "Productos" },
   { key: "mapa",         label: "Mapa de zonas" },
   { key: "pipeline",     label: "Captación" },
@@ -622,12 +623,12 @@ export const ROLES = {
   admin: {
     label: "Admin",
     color: "#7c3aed",
-    secciones: ["dashboard","agencias","productos","mapa","pipeline","marketing","distribucion","usuarios"],
+    secciones: ["dashboard","agencias","sindicatos","productos","mapa","pipeline","marketing","distribucion","usuarios"],
   },
   comercial: {
     label: "Comercial",
     color: "#0891b2",
-    secciones: ["dashboard","agencias","productos","mapa","pipeline","marketing","distribucion"],
+    secciones: ["dashboard","agencias","sindicatos","productos","mapa","pipeline","marketing","distribucion"],
   },
   marketing: {
     label: "Marketing",
