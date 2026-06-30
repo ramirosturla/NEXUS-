@@ -302,6 +302,34 @@ export const totalPax = (ag) =>
 export const totalFacturado = (ag) =>
   ag.reservas.filter((x) => x.estado === "Confirmada").reduce((s, x) => s + x.monto, 0);
 
+// Serie mensual REAL (12 meses) de pasajeros e ingresos, a partir de las
+// reservas de todas las agencias para un año dado. Ingresos en miles ($ARS).
+export const seriePorMes = (agencias, anio) => {
+  const meses = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+  const base = meses.map((mes) => ({ mes, pax: 0, ingresos: 0 }));
+  for (const a of agencias) {
+    for (const r of (a.reservas || [])) {
+      const y = parseInt(String(r.fecha).slice(0, 4));
+      const m = parseInt(String(r.fecha).slice(5, 7)) - 1;
+      if (y !== anio || m < 0 || m > 11) continue;
+      if (r.estado !== "Cancelada") base[m].pax += r.pax || 0;
+      if (r.estado === "Confirmada") base[m].ingresos += Math.round((r.monto || 0) / 1000);
+    }
+  }
+  return base;
+};
+
+// Años que tienen reservas cargadas (para el selector del dashboard), de mayor a menor.
+export const aniosConReservas = (agencias) => {
+  const set = new Set();
+  for (const a of agencias) for (const r of (a.reservas || [])) {
+    const y = parseInt(String(r.fecha).slice(0, 4));
+    if (!Number.isNaN(y)) set.add(y);
+  }
+  const arr = [...set].sort((x, y) => y - x);
+  return arr.length ? arr : [new Date().getFullYear()];
+};
+
 // Agregación por zona para el mapa de calor
 export const resumenPorZona = (agencias) => {
   const acc = {};
