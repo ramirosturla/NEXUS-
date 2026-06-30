@@ -14,7 +14,7 @@ import {
 } from "recharts";
 import {
   BRAND, USUARIOS, EXCURSIONES, ESTADOS_AGENCIA, ETAPAS,
-  AGENCIAS, DATOS_MENSUALES, ZONAS, fmt, totalPax,
+  AGENCIAS, DATOS_MENSUALES, ZONAS, fmt, totalPax, seriePorMes, aniosConReservas,
   totalFacturado, geoDeCiudad, resumenPorZona, PRODUCTOS_INICIALES,
   CONDICIONES_PAGO, precioAgencia, parseRankingWorkbook,
   CATEGORIAS_MKT, colorCategoria, parsePresupuestoWorkbook,
@@ -276,6 +276,12 @@ function Dashboard({ agencias }) {
   const facturacion = agencias.reduce((s, a) => s + totalFacturado(a), 0);
   const reservasTotal = agencias.reduce((s, a) => s + a.reservas.length, 0);
 
+  // Serie mensual real + selector de año (por defecto, el año más reciente con datos)
+  const aniosDisp = useMemo(() => aniosConReservas(agencias), [agencias]);
+  const [anioSel, setAnioSel] = useState(null);
+  const anioActivo = anioSel ?? aniosDisp[0];
+  const serie = useMemo(() => seriePorMes(agencias, anioActivo), [agencias, anioActivo]);
+
   // Pasajeros por excursión
   const porExcursion = EXCURSIONES.map((exc) => {
     const pax = agencias.reduce((s, a) =>
@@ -296,10 +302,16 @@ function Dashboard({ agencias }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Pasajeros e ingresos mensuales */}
         <div className="bg-white rounded-xl border border-slate-200 p-6">
-          <h3 className="font-semibold text-slate-800 mb-1">Pasajeros e ingresos mensuales</h3>
-          <p className="text-sm text-slate-500 mb-5">Ingresos en miles de $ARS</p>
+          <div className="flex items-start justify-between gap-3 mb-1">
+            <h3 className="font-semibold text-slate-800">Pasajeros e ingresos mensuales</h3>
+            <select value={anioActivo} onChange={(e) => setAnioSel(Number(e.target.value))}
+              className="text-xs font-medium text-slate-600 border border-slate-200 rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+              {aniosDisp.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+          <p className="text-sm text-slate-500 mb-5">Año {anioActivo} · ingresos en miles de $ARS</p>
           <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={DATOS_MENSUALES} margin={{ left: -18, right: 8 }}>
+            <LineChart data={serie} margin={{ left: -18, right: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
               <XAxis dataKey="mes" stroke="#94a3b8" fontSize={12} />
               <YAxis stroke="#94a3b8" fontSize={12} />
@@ -3056,6 +3068,36 @@ export default function App() {
         : a
     ));
 
+  // ── Sindicatos: integración con el padrón de agencias ──────────
+  // Suma a memoria la agencia recién creada como sindicato, para que el autosave
+  // no la borre y para poder registrarle reservas.
+  const onSindicatoCreado = (agencia) =>
+    setAgencias((prev) => (prev.some((a) => a.id === agencia.id) ? prev : [agencia, ...prev]));
+
+  // Registra (o quita) los pasajeros de la carga mensual de un sindicato como una
+  // reserva confirmada en su propia agencia, para que cuenten como "pasajeros
+  // reservados" en el dashboard. pax=null elimina la reserva de ese mes.
+  const onSyncReservaSindicato = (agenciaId, anio, mes, pax) =>
+    setAgencias((prev) => prev.map((a) => {
+      if (a.id !== agenciaId) return a;
+      const periodo = `${anio}-${String(mes).padStart(2, "0")}`;
+      const otras = (a.reservas || []).filter((r) => !(r.origen === "sindicato" && r.periodo === periodo));
+      if (pax == null) return { ...a, reservas: otras };
+      const reserva = {
+        id: `sind-${agenciaId}-${periodo}`,
+        fecha: `${periodo}-15`,
+        excursion: "Cupón sindical",
+        excId: null,
+        pax,
+        ejecutivo: a.ejecutivo,
+        estado: "Confirmada",
+        monto: 0,
+        origen: "sindicato",
+        periodo,
+      };
+      return { ...a, reservas: [reserva, ...otras] };
+    }));
+
   // Cambiar estado y/o etapa de captación de la agencia
   const updateAgencia = (agId, cambios) =>
     setAgencias(agencias.map((a) =>
@@ -3200,7 +3242,7 @@ export default function App() {
           <>
           {vista === "dashboard" && <Dashboard agencias={agencias} />}
           {vista === "agencias" && <Agencias agencias={agencias} addAgencia={addAgencia} addVisita={addVisita} deleteAgencia={deleteAgencia} productos={productos} setPreciosAgencia={setPreciosAgencia} importarAgencias={importarAgencias} addReserva={addReserva} updateReserva={updateReserva} deleteReserva={deleteReserva} updateAgencia={updateAgencia} nombresEquipo={nombresEquipo} soloLectura={!perfil?.puedeEditar} />}
-          {vista === "sindicatos" && <Sindicatos usuario={usuario} puedeEditar={perfil?.puedeEditar} />}
+          {vista === "sindicatos" && <Sindicatos usuario={usuario} puedeEditar={perfil?.puedeEditar} onSindicatoCreado={onSindicatoCreado} onSyncReservaSindicato={onSyncReservaSindicato} />}
           {vista === "productos" && <Productos productos={productos} setProductos={setProductos} />}
           {vista === "mapa" && <MapaZonas agencias={agencias} />}
           {vista === "pipeline" && <Pipeline agencias={agencias} updateAgencia={updateAgencia} />}
