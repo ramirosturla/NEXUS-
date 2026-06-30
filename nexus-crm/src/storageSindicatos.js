@@ -186,7 +186,30 @@ export async function crearSindicato(datos, geo = {}) {
     if (eCo.code === "23505") throw new Error("Ese código de cupón ya está en uso.");
     throw eCo;
   }
-  return { agenciaId, convenioId };
+  return {
+    agenciaId,
+    convenioId,
+    // Agencia en formato de la app, para que App la sume a su estado y el
+    // autosave no la borre (y para poder registrarle reservas).
+    agencia: {
+      id: agenciaId,
+      nombre: ag.nombre,
+      contacto: ag.contacto,
+      email: ag.email,
+      telefono: ag.telefono,
+      ciudad: ag.ciudad,
+      direccion: ag.direccion,
+      zona: ag.zona,
+      lat: ag.lat,
+      lng: ag.lng,
+      estado: ag.estado,
+      ejecutivo: ag.ejecutivo,
+      desde: ag.desde,
+      precios: {},
+      reservas: [],
+      visitas: [],
+    },
+  };
 }
 
 // Actualiza campos del convenio (parcial).
