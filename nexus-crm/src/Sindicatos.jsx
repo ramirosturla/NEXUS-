@@ -132,7 +132,7 @@ function Modal({ title, subtitle, onClose, children, footer, maxW = "max-w-md" }
 // ═══════════════════════════════════════════════════════════════
 // Modal: Cargar pasajeros del mes
 // ═══════════════════════════════════════════════════════════════
-function CargaPasajerosModal({ sindicato, matriz, cargas, usuario, onClose, onSaved }) {
+function CargaPasajerosModal({ sindicato, matriz, cargas, usuario, onClose, onSaved, onSyncReserva }) {
   const hoy = new Date();
   const mesAnterior = hoy.getMonth() === 0 ? 12 : hoy.getMonth(); // 1-12, mes pasado
   const anioAnterior = hoy.getMonth() === 0 ? hoy.getFullYear() - 1 : hoy.getFullYear();
@@ -171,6 +171,7 @@ function CargaPasajerosModal({ sindicato, matriz, cargas, usuario, onClose, onSa
     try {
       if (reemplazar && existente) await eliminarCarga(existente.id);
       const r = await guardarCarga({ convenio: sindicato, anio, mes, pasajeros: n, resultado, usuario, observaciones: obs });
+      onSyncReserva?.(sindicato.agenciaId, anio, mes, n);
       onSaved(r);
     } catch (e) {
       setError(e.message || "No se pudo guardar la carga.");
@@ -278,7 +279,7 @@ function CargaPasajerosModal({ sindicato, matriz, cargas, usuario, onClose, onSa
 // ═══════════════════════════════════════════════════════════════
 // Modal: Nuevo sindicato (crea agencia tipo='sindicato' + convenio)
 // ═══════════════════════════════════════════════════════════════
-function NuevoSindicatoForm({ matrices, onClose, onSaved }) {
+function NuevoSindicatoForm({ matrices, onClose, onSaved, onCreado }) {
   const [form, setForm] = useState({
     nombre: "", contacto: "", email: "", telefono: "", ciudad: "CABA",
     codigoCupon: "", matrizId: matrices[0]?.id || "", descuentoInicial: "0",
@@ -294,7 +295,8 @@ function NuevoSindicatoForm({ matrices, onClose, onSaved }) {
     setGuardando(true); setError("");
     try {
       const geo = geoDeCiudad(form.ciudad || "CABA", Date.now());
-      await crearSindicato({ ...form, descuentoInicial: Number(form.descuentoInicial) || 0 }, geo);
+      const res = await crearSindicato({ ...form, descuentoInicial: Number(form.descuentoInicial) || 0 }, geo);
+      onCreado?.(res.agencia);
       onSaved();
     } catch (e) {
       setError(e.message || "No se pudo crear el sindicato.");
@@ -460,7 +462,7 @@ function MatrizEscalasEditor({ matriz, onClose, onSaved }) {
 // ═══════════════════════════════════════════════════════════════
 // Ficha de detalle del sindicato
 // ═══════════════════════════════════════════════════════════════
-function SindicatoDetalle({ sindicato, cargas, matriz, puedeEditar, onBack, onChanged, onCopiar }) {
+function SindicatoDetalle({ sindicato, cargas, matriz, puedeEditar, onBack, onChanged, onCopiar, onSyncReserva }) {
   const [historial, setHistorial] = useState([]);
   const [trabajando, setTrabajando] = useState(false);
 
@@ -484,9 +486,9 @@ function SindicatoDetalle({ sindicato, cargas, matriz, puedeEditar, onBack, onCh
     try { await promoverDescuentoPendiente(sindicato); onChanged(); }
     catch (e) { console.error(e); setTrabajando(false); }
   };
-  const borrarCarga = async (id) => {
+  const borrarCarga = async (c) => {
     setTrabajando(true);
-    try { await eliminarCarga(id); onChanged(); }
+    try { await eliminarCarga(c.id); onSyncReserva?.(sindicato.agenciaId, c.anio, c.mes, null); onChanged(); }
     catch (e) { console.error(e); setTrabajando(false); }
   };
 
@@ -578,7 +580,7 @@ function SindicatoDetalle({ sindicato, cargas, matriz, puedeEditar, onBack, onCh
                   <TramoBadge tramo={c.tramoResultante} nombre={tramos.find((t) => t.tramo === c.tramoResultante)?.nombreTramo} />
                   <span className="text-sm w-12 text-right" style={{ color: BRAND.marea }}><Pct v={c.descuentoResultante} /></span>
                   {puedeEditar && (
-                    <button onClick={() => borrarCarga(c.id)} disabled={trabajando} className="text-slate-300 hover:text-rose-500"><Trash2 size={15} /></button>
+                    <button onClick={() => borrarCarga(c)} disabled={trabajando} className="text-slate-300 hover:text-rose-500"><Trash2 size={15} /></button>
                   )}
                 </div>
               ))}
@@ -618,7 +620,7 @@ function SindicatoDetalle({ sindicato, cargas, matriz, puedeEditar, onBack, onCh
 // ═══════════════════════════════════════════════════════════════
 // VISTA PRINCIPAL
 // ═══════════════════════════════════════════════════════════════
-export default function Sindicatos({ usuario, puedeEditar = false }) {
+export default function Sindicatos({ usuario, puedeEditar = false, onSindicatoCreado, onSyncReservaSindicato }) {
   const [matrices, setMatrices] = useState([]);
   const [sindicatos, setSindicatos] = useState([]);
   const [cargas, setCargas] = useState([]); // todas
@@ -695,6 +697,7 @@ export default function Sindicatos({ usuario, puedeEditar = false }) {
         onBack={() => setSel(null)}
         onCopiar={copiar}
         onChanged={async () => { await cargar(); }}
+        onSyncReserva={onSyncReservaSindicato}
       />
     );
   }
@@ -810,6 +813,7 @@ export default function Sindicatos({ usuario, puedeEditar = false }) {
           matriz={matrizDe(modalCarga)}
           cargas={porConvenio[modalCarga.convenioId] || []}
           usuario={usuario}
+          onSyncReserva={onSyncReservaSindicato}
           onClose={() => setModalCarga(null)}
           onSaved={async (r) => {
             setModalCarga(null);
@@ -819,7 +823,7 @@ export default function Sindicatos({ usuario, puedeEditar = false }) {
         />
       )}
       {modalNuevo && (
-        <NuevoSindicatoForm matrices={matrices} onClose={() => setModalNuevo(false)}
+        <NuevoSindicatoForm matrices={matrices} onClose={() => setModalNuevo(false)} onCreado={onSindicatoCreado}
           onSaved={async () => { setModalNuevo(false); await cargar(); aviso("ok", "Sindicato creado."); }} />
       )}
       {modalMatriz && matrizActiva && (
