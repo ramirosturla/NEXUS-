@@ -620,7 +620,7 @@ function SindicatoDetalle({ sindicato, cargas, matriz, puedeEditar, onBack, onCh
 // ═══════════════════════════════════════════════════════════════
 // VISTA PRINCIPAL
 // ═══════════════════════════════════════════════════════════════
-export default function Sindicatos({ usuario, puedeEditar = false, onSindicatoCreado, onSyncReservaSindicato }) {
+export default function Sindicatos({ usuario, puedeEditar = false, onSindicatoCreado, onSyncReservaSindicato, onReconciliarReservas }) {
   const [matrices, setMatrices] = useState([]);
   const [sindicatos, setSindicatos] = useState([]);
   const [cargas, setCargas] = useState([]); // todas
@@ -638,6 +638,16 @@ export default function Sindicatos({ usuario, puedeEditar = false, onSindicatoCr
     try {
       const [m, s, c] = await Promise.all([fetchMatrices(), fetchSindicatos(), fetchTodasLasCargas()]);
       setMatrices(m); setSindicatos(s); setCargas(c);
+      // Backfill: reflejar todas las cargas como reservas en sus agencias
+      if (onReconciliarReservas) {
+        const mapa = {};
+        for (const sind of s) mapa[sind.agenciaId] = [];
+        for (const carga of c) {
+          const sind = s.find((x) => x.convenioId === carga.convenioId);
+          if (sind) (mapa[sind.agenciaId] ||= []).push({ anio: carga.anio, mes: carga.mes, pax: carga.pasajeros });
+        }
+        onReconciliarReservas(mapa);
+      }
     } catch (e) {
       console.error(e);
       setMsg({ tipo: "error", texto: "No se pudieron cargar los datos del módulo." });
