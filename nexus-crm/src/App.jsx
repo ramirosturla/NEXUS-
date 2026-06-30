@@ -1553,6 +1553,8 @@ function CalendarioContenidos({ contenidos, equipoMkt, addContenido, updateConte
     (filtroCanal === "todos" || c.canal === filtroCanal) &&
     (filtroCuenta === "todas" || (c.cuenta || "sturla") === filtroCuenta)
   );
+  const sinFecha = items.filter((c) => !c.fecha);
+  const conFecha = items.filter((c) => c.fecha);
 
   // Construir grilla del mes
   const primerDia = new Date(anio, mes, 1);
@@ -1630,6 +1632,44 @@ function CalendarioContenidos({ contenidos, equipoMkt, addContenido, updateConte
         ))}
       </div>
 
+      {/* Apartado: tareas sin fecha pactada (backlog) */}
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-slate-800">Sin fecha pactada</h3>
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">{sinFecha.length}</span>
+          </div>
+          <button onClick={() => setEditando({ fecha: "" })}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-cyan-700 hover:text-cyan-800">
+            <Plus size={14} /> Agregar tarea
+          </button>
+        </div>
+        {sinFecha.length === 0 ? (
+          <p className="px-5 py-5 text-sm text-slate-400">Lo que cargues sin fecha va a aparecer acá, como pendiente por agendar.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2 p-4">
+            {sinFecha.map((c) => {
+              const act = tipoActividad(c.actividad);
+              const es = estadoContenido(c.estado);
+              return (
+                <button key={c.id} onClick={() => setEditando(c)}
+                  className="text-left rounded-lg border border-slate-200 px-3 py-2 hover:border-slate-300 hover:shadow-sm transition-all"
+                  style={{ borderLeft: `3px solid ${act.color}` }}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded" style={{ background: act.color + "18", color: act.color }}>{act.label}</span>
+                    <span className="text-sm font-medium text-slate-700">{c.titulo}</span>
+                  </div>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className="text-[11px] font-medium px-1.5 py-0.5 rounded-full" style={{ color: es.color, background: es.bg }}>{es.label}</span>
+                    {c.responsable && <span className="text-[11px] text-slate-400">{c.responsable}</span>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {vista === "calendario" ? (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           {/* Cabecera días */}
@@ -1657,12 +1697,12 @@ function CalendarioContenidos({ contenidos, equipoMkt, addContenido, updateConte
                       </div>
                       <div className="space-y-1">
                         {piezas.slice(0, 3).map((c) => {
-                          const ca = canalContenido(c.canal);
+                          const act = tipoActividad(c.actividad);
                           const es = estadoContenido(c.estado);
                           return (
                             <button key={c.id} onClick={() => setEditando(c)}
                               className="w-full text-left rounded px-1.5 py-1 text-[11px] leading-tight truncate hover:opacity-80 transition-opacity"
-                              style={{ background: ca.color + "15", borderLeft: `2px solid ${ca.color}` }}
+                              style={{ background: act.color + "15", borderLeft: `2px solid ${act.color}` }}
                               title={`${c.titulo} · ${es.label}`}>
                               <span className="font-medium text-slate-700">{c.titulo}</span>
                             </button>
@@ -1682,25 +1722,24 @@ function CalendarioContenidos({ contenidos, equipoMkt, addContenido, updateConte
       ) : (
         /* Vista lista */
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          {items.length === 0 && (
-            <div className="px-6 py-10 text-center text-slate-400 text-sm">No hay actividades. Creá la primera con "Nueva actividad".</div>
+          {conFecha.length === 0 && (
+            <div className="px-6 py-10 text-center text-slate-400 text-sm">No hay actividades con fecha. Creá una con "Nueva actividad" o agendá las del backlog.</div>
           )}
           <div className="divide-y divide-slate-100">
-            {[...items].sort((a, b) => (a.fecha || "").localeCompare(b.fecha || "")).map((c) => {
-              const ca = canalContenido(c.canal);
+            {[...conFecha].sort((a, b) => (a.fecha || "").localeCompare(b.fecha || "")).map((c) => {
               const es = estadoContenido(c.estado);
               const act = tipoActividad(c.actividad);
               const cta = cuentaInfo(c.cuenta);
               return (
                 <button key={c.id} onClick={() => setEditando(c)} className="w-full flex items-center gap-4 px-6 py-3.5 hover:bg-slate-50/50 text-left">
-                  <span className="w-1 h-10 rounded-full shrink-0" style={{ background: ca.color }} />
+                  <span className="w-1 h-10 rounded-full shrink-0" style={{ background: act.color }} />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded shrink-0" style={{ background: act.color + "18", color: act.color }}>{act.label}</span>
                       <p className="font-medium text-slate-800 truncate">{c.titulo}</p>
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      {c.fecha} · {ca.label}{c.tipo ? ` · ${c.tipo}` : ""}{cta ? ` · ${cta.label}` : ""}
+                      {c.fecha}{c.canal ? ` · ${canalContenido(c.canal).label}` : ""}{c.tipo ? ` · ${c.tipo}` : ""}{cta ? ` · ${cta.label}` : ""}
                     </p>
                   </div>
                   <span className="text-xs font-semibold px-2.5 py-1 rounded-full shrink-0" style={{ color: es.color, background: es.bg }}>{es.label}</span>
@@ -1727,21 +1766,25 @@ function ContenidoForm({ contenido, fechaInicial, equipoMkt, onClose, onSave, on
   const [form, setForm] = useState({
     titulo: contenido?.titulo || "",
     descripcion: contenido?.descripcion || "",
-    fecha: contenido?.fecha || fechaInicial || "",
+    fecha: contenido?.fecha ?? (fechaInicial ?? ""),
     canal: contenido?.canal || "instagram",
     tipo: contenido?.tipo || "Post",
     estado: contenido?.estado || "idea",
     responsable: contenido?.responsable || "",
     url: contenido?.url || "",
-    actividad: contenido?.actividad || "contenido",
+    actividad: contenido?.actividad || "tarea",
     cuenta: contenido?.cuenta || "sturla",
   });
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   const nombres = (equipoMkt || []).filter((m) => m.activo).map((m) => m.nombre);
+  const esContenido = form.actividad === "contenido";
 
   const submit = () => {
-    if (!form.titulo.trim() || !form.fecha) return;
-    onSave(form);
+    if (!form.titulo.trim()) return;
+    const data = { ...form };
+    // Si no es una pieza de contenido, no arrastramos los campos de redes
+    if (!esContenido) { data.canal = ""; data.tipo = ""; data.url = ""; }
+    onSave(data);
   };
 
   return (
@@ -1765,43 +1808,26 @@ function ContenidoForm({ contenido, fechaInicial, equipoMkt, onClose, onSave, on
             </div>
           </Field>
           <Field label="Título">
-            <input value={form.titulo} onChange={set("titulo")} autoFocus placeholder="Ej: Reel paseo al atardecer en el Delta"
+            <input value={form.titulo} onChange={set("titulo")} autoFocus placeholder="Ej: Llamar al proveedor de catering / Reel del atardecer"
               className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
           </Field>
           <div className="grid grid-cols-2 gap-4">
-            <Field label="Fecha">
+            <Field label="Fecha (opcional)">
               <input type="date" value={form.fecha} onChange={set("fecha")}
                 className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
             </Field>
-            <Field label="Canal / red">
-              <select value={form.canal} onChange={set("canal")}
+            <Field label="Responsable">
+              <select value={form.responsable} onChange={set("responsable")}
                 className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
-                {CANALES_CONTENIDO.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+                <option value="">Sin asignar</option>
+                {nombres.length === 0 && form.responsable === "" && <option value="" disabled>Agregá gente en "Equipo de marketing"</option>}
+                {nombres.map((n) => <option key={n}>{n}</option>)}
               </select>
             </Field>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Cuenta">
-              <select value={form.cuenta} onChange={set("cuenta")}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
-                {CUENTAS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
-              </select>
-            </Field>
-            <Field label="Tipo de pieza">
-              <select value={form.tipo} onChange={set("tipo")}
-                className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
-                {TIPOS_CONTENIDO.map((t) => <option key={t}>{t}</option>)}
-              </select>
-            </Field>
-          </div>
-          <Field label="Responsable">
-            <select value={form.responsable} onChange={set("responsable")}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
-              <option value="">Sin asignar</option>
-              {nombres.length === 0 && form.responsable === "" && <option value="" disabled>Agregá gente en "Equipo de marketing"</option>}
-              {nombres.map((n) => <option key={n}>{n}</option>)}
-            </select>
-          </Field>
+          {!form.fecha && (
+            <p className="-mt-2 text-xs text-slate-400">Sin fecha, queda en el apartado "Sin fecha pactada" hasta que la agendes.</p>
+          )}
           <Field label="Estado">
             <div className="flex gap-1.5 flex-wrap">
               {ESTADOS_CONTENIDO.map((e) => (
@@ -1813,13 +1839,41 @@ function ContenidoForm({ contenido, fechaInicial, equipoMkt, onClose, onSave, on
               ))}
             </div>
           </Field>
-          <Field label="Notas / descripción">
-            <textarea value={form.descripcion} onChange={set("descripcion")} rows={2} placeholder="Idea, copy, referencias..."
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 resize-none" />
+          <Field label="Cuenta / marca">
+            <select value={form.cuenta} onChange={set("cuenta")}
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+              {CUENTAS.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
           </Field>
-          <Field label="URL de publicación (opcional)">
-            <input value={form.url} onChange={set("url")} placeholder="https://..."
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
+
+          {/* Campos específicos de contenido (solo cuando la actividad es "Contenido") */}
+          {esContenido && (
+            <div className="rounded-xl border border-slate-200 p-4 space-y-4" style={{ background: "#f8fdfe" }}>
+              <p className="text-xs font-semibold text-slate-500">Detalle de la pieza</p>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Canal / red">
+                  <select value={form.canal} onChange={set("canal")}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+                    {CANALES_CONTENIDO.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+                  </select>
+                </Field>
+                <Field label="Tipo de pieza">
+                  <select value={form.tipo} onChange={set("tipo")}
+                    className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-cyan-500/30">
+                    {TIPOS_CONTENIDO.map((t) => <option key={t}>{t}</option>)}
+                  </select>
+                </Field>
+              </div>
+              <Field label="URL de publicación (opcional)">
+                <input value={form.url} onChange={set("url")} placeholder="https://..."
+                  className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500" />
+              </Field>
+            </div>
+          )}
+
+          <Field label="Notas / descripción">
+            <textarea value={form.descripcion} onChange={set("descripcion")} rows={2} placeholder="Detalle, contexto, links de referencia..."
+              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-cyan-500/30 focus:border-cyan-500 resize-none" />
           </Field>
         </div>
         <div className="flex gap-3 px-6 py-4 border-t border-slate-100">
@@ -3098,6 +3152,33 @@ export default function App() {
       return { ...a, reservas: [reserva, ...otras] };
     }));
 
+  // Reconcilia TODAS las cargas de sindicatos como reservas en sus agencias
+  // (sirve de backfill para cargas hechas antes de esta función). Recibe un
+  // mapa { agenciaId: [{anio, mes, pax}, ...] }. Solo actualiza el estado si
+  // algo realmente cambió, para no disparar guardados innecesarios.
+  const onReconciliarReservasSindicato = (mapa) =>
+    setAgencias((prev) => {
+      let cambio = false;
+      const next = prev.map((a) => {
+        if (!(a.id in mapa)) return a;
+        const cargas = mapa[a.id] || [];
+        const sindReservas = cargas.map(({ anio, mes, pax }) => {
+          const periodo = `${anio}-${String(mes).padStart(2, "0")}`;
+          return {
+            id: `sind-${a.id}-${periodo}`, fecha: `${periodo}-15`, excursion: "Cupón sindical",
+            excId: null, pax, ejecutivo: a.ejecutivo, estado: "Confirmada", monto: 0,
+            origen: "sindicato", periodo,
+          };
+        });
+        const firma = (rs) => JSON.stringify(rs.filter((r) => r.origen === "sindicato").map((r) => `${r.periodo}:${r.pax}`).sort());
+        if (firma(a.reservas || []) === firma(sindReservas)) return a;
+        cambio = true;
+        const noSind = (a.reservas || []).filter((r) => r.origen !== "sindicato");
+        return { ...a, reservas: [...sindReservas, ...noSind] };
+      });
+      return cambio ? next : prev;
+    });
+
   // Cambiar estado y/o etapa de captación de la agencia
   const updateAgencia = (agId, cambios) =>
     setAgencias(agencias.map((a) =>
@@ -3242,7 +3323,7 @@ export default function App() {
           <>
           {vista === "dashboard" && <Dashboard agencias={agencias} />}
           {vista === "agencias" && <Agencias agencias={agencias} addAgencia={addAgencia} addVisita={addVisita} deleteAgencia={deleteAgencia} productos={productos} setPreciosAgencia={setPreciosAgencia} importarAgencias={importarAgencias} addReserva={addReserva} updateReserva={updateReserva} deleteReserva={deleteReserva} updateAgencia={updateAgencia} nombresEquipo={nombresEquipo} soloLectura={!perfil?.puedeEditar} />}
-          {vista === "sindicatos" && <Sindicatos usuario={usuario} puedeEditar={perfil?.puedeEditar} onSindicatoCreado={onSindicatoCreado} onSyncReservaSindicato={onSyncReservaSindicato} />}
+          {vista === "sindicatos" && <Sindicatos usuario={usuario} puedeEditar={perfil?.puedeEditar} onSindicatoCreado={onSindicatoCreado} onSyncReservaSindicato={onSyncReservaSindicato} onReconciliarReservas={onReconciliarReservasSindicato} />}
           {vista === "productos" && <Productos productos={productos} setProductos={setProductos} />}
           {vista === "mapa" && <MapaZonas agencias={agencias} />}
           {vista === "pipeline" && <Pipeline agencias={agencias} updateAgencia={updateAgencia} />}
